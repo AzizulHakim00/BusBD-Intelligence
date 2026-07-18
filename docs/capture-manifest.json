@@ -1,0 +1,26 @@
+{
+  "source": "HAR response-body extraction",
+  "host": "busbd-intelligence.sabrinaisonni945783.chatgpt.site",
+  "captured_resource_count": 19,
+  "files": [
+    "assets/_vinext_fonts/geist-8ac0455e797f/geist-001175b1.woff2",
+    "assets/_vinext_fonts/geist-8ac0455e797f/geist-52306abf.woff2",
+    "assets/_vinext_fonts/geist-8ac0455e797f/geist-875ccdd4.woff2",
+    "assets/_vinext_fonts/geist-8ac0455e797f/geist-98bbbccb.woff2",
+    "assets/_vinext_fonts/geist-8ac0455e797f/geist-ff2310f5.woff2",
+    "assets/_vinext_fonts/geist-mono-00e989178794/geist-mono-013b2f2f.woff2",
+    "assets/_vinext_fonts/geist-mono-00e989178794/geist-mono-0638449e.woff2",
+    "assets/_vinext_fonts/geist-mono-00e989178794/geist-mono-44745446.woff2",
+    "assets/_vinext_fonts/geist-mono-00e989178794/geist-mono-44e03052.woff2",
+    "assets/_vinext_fonts/geist-mono-00e989178794/geist-mono-971fb274.woff2",
+    "assets/_vinext_fonts/geist-mono-00e989178794/geist-mono-f6b33328.woff2",
+    "assets/framework-CXnKph_e.js",
+    "assets/index-C9ksAzyR.js",
+    "assets/index-DCIpn-Yu.css",
+    "assets/layout-segment-context-BHVQE6lQ.js",
+    "assets/page-B2LLXDdi.js",
+    "assets/rolldown-runtime-S-ySWqyJ.js",
+    "favicon.svg",
+    "index.html"
+  ]
+}
