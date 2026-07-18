@@ -4,8 +4,5 @@ services:
     runtime: docker
     plan: free
     dockerfilePath: ./Dockerfile
-    healthCheckPath: /actuator/health
-    autoDeploy: true
-    envVars:
-      - key: JAVA_TOOL_OPTIONS
-        value: -XX:MaxRAMPercentage=75.0
+    healthCheckPath: /
+    autoDeployTrigger: commit
