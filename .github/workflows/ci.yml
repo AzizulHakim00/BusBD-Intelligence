@@ -18,13 +18,27 @@ jobs:
         with:
           node-version: 22
       - run: npm install
-      - run: node scripts/materialize-v23.mjs
-      - name: Upload materialized V2.3 source
+      - name: Diagnose and materialize V2.3 source
+        shell: bash
+        run: |
+          set +e
+          node scripts/materialize-v23.mjs > materialize.log 2>&1
+          echo $? > materialize.status
+          cat materialize.log
+          exit 0
+      - name: Upload V2.3 diagnostic
+        if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: v23-materialized-source
-          path: frontend/src
+          name: v23-diagnostic
+          path: |
+            frontend/materialize.log
+            frontend/materialize.status
+            frontend/v23/source.json.gz
+            frontend/src
           retention-days: 1
+      - name: Require successful materialization
+        run: test "$(cat materialize.status)" = "0"
       - run: npm run build
 
   backend:
