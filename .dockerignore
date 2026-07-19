@@ -1,5 +1,7 @@
+**/node_modules
+**/dist
+**/target
 .git
 .github
-README.md
 *.zip
 .DS_Store

@@ -1,0 +1,58 @@
+services:
+  postgres:
+    build: ./database
+    image: busbd-postgis-pgvector:17
+    environment:
+      POSTGRES_DB: busbd
+      POSTGRES_USER: busbd
+      POSTGRES_PASSWORD: busbd
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./database/init.sql:/docker-entrypoint-initdb.d/01-init.sql:ro
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U busbd -d busbd"]
+      interval: 5s
+      timeout: 5s
+      retries: 15
+
+  redis:
+    image: redis:7.4-alpine
+    command: redis-server --appendonly yes
+    volumes:
+      - redis_data:/data
+    ports:
+      - "6379:6379"
+
+  ml-service:
+    build: ./ml-service
+    ports:
+      - "8000:8000"
+
+  app:
+    build: .
+    environment:
+      SPRING_PROFILES_ACTIVE: postgres
+      DATABASE_URL: jdbc:postgresql://postgres:5432/busbd
+      DATABASE_USERNAME: busbd
+      DATABASE_PASSWORD: busbd
+      DATABASE_DRIVER: org.postgresql.Driver
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      ML_SERVICE_URL: http://ml-service:8000
+      JWT_SECRET: local-development-secret-change-before-production-123456789
+      DEMO_MODE: "true"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_started
+      ml-service:
+        condition: service_started
+    ports:
+      - "8080:8080"
+
+volumes:
+  postgres_data:
+  redis_data:

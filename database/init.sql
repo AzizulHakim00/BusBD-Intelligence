@@ -1,0 +1,11 @@
+CREATE EXTENSION IF NOT EXISTS postgis;
+CREATE EXTENSION IF NOT EXISTS vector;
+
+CREATE TABLE IF NOT EXISTS model_registry (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  model_name VARCHAR(120) NOT NULL,
+  model_version VARCHAR(60) NOT NULL,
+  metrics JSONB NOT NULL DEFAULT '{}'::jsonb,
+  active BOOLEAN NOT NULL DEFAULT FALSE,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);

@@ -1,0 +1,10 @@
+package com.busbd.intelligence.controller;
+
+import org.springframework.stereotype.Controller;
+import org.springframework.web.bind.annotation.GetMapping;
+
+@Controller
+public class SpaController {
+    @GetMapping(value = {"/app", "/app/**", "/login", "/dashboard", "/tracking", "/booking/**"})
+    public String forward() { return "forward:/index.html"; }
+}

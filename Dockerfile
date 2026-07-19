@@ -1,13 +1,23 @@
-FROM nginx:1.27-alpine
+FROM node:22-alpine AS frontend-build
+WORKDIR /frontend
+COPY frontend/package.json frontend/package-lock.json* ./
+RUN npm install
+COPY frontend/ ./
+RUN npm run build
 
-ENV PORT=10000
+FROM maven:3.9.11-eclipse-temurin-21 AS backend-build
+WORKDIR /workspace
+COPY backend/pom.xml ./pom.xml
+RUN mvn -B -q dependency:go-offline
+COPY backend/src ./src
+COPY --from=frontend-build /frontend/dist ./src/main/resources/static
+RUN mvn -B -DskipTests package
 
-COPY nginx.conf.template /etc/nginx/templates/default.conf.template
-COPY index.html /usr/share/nginx/html/index.html
-COPY 404.html /usr/share/nginx/html/404.html
-COPY favicon.svg /usr/share/nginx/html/favicon.svg
-COPY assets /usr/share/nginx/html/assets
-
-EXPOSE 10000
-
-CMD ["nginx", "-g", "daemon off;"]
+FROM eclipse-temurin:21-jre-alpine
+WORKDIR /app
+RUN addgroup -S busbd && adduser -S busbd -G busbd
+COPY --from=backend-build /workspace/target/busbd-intelligence-1.0.0.jar app.jar
+USER busbd
+EXPOSE 8080
+ENV JAVA_OPTS="-XX:MaxRAMPercentage=75.0"
+ENTRYPOINT ["sh", "-c", "java $JAVA_OPTS -jar app.jar"]
