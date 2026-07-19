@@ -29,6 +29,8 @@ public class Trip {
     private String droppingPoint;
     private int availableSeats;
     private double delayRisk = 0.12;
+    private OffsetDateTime startedAt;
+    private OffsetDateTime endedAt;
 
     public Trip(UUID busId, UUID routeId, UUID driverId, OffsetDateTime departureTime,
                 OffsetDateTime arrivalTime, BigDecimal fare, int availableSeats) {

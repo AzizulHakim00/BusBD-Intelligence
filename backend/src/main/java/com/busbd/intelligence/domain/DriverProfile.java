@@ -12,6 +12,8 @@ public class DriverProfile {
     private UUID id;
     @Column(nullable = false)
     private UUID operatorId;
+    @Column(unique = true)
+    private UUID userId;
     @Column(nullable = false)
     private String fullName;
     @Column(nullable = false, unique = true)

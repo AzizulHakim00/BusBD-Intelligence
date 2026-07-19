@@ -24,9 +24,9 @@ public class SecurityConfig {
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers("/", "/index.html", "/assets/**", "/favicon.svg", "/error").permitAll()
-                        .requestMatchers("/api/auth/login", "/api/auth/register", "/api/public/**", "/api/tracking/locations", "/ws/**").permitAll()
+                        .requestMatchers("/api/auth/login", "/api/auth/register", "/api/public/**", "/ws/**").permitAll()
                         .requestMatchers("/swagger-ui/**", "/swagger-ui.html", "/api-docs/**", "/actuator/health", "/h2-console/**").permitAll()
-                        .requestMatchers(HttpMethod.GET, "/api/trips/**", "/api/bookings/{reference}").permitAll()
+                        .requestMatchers(HttpMethod.GET, "/api/trips/**", "/api/bookings/{reference}", "/api/tracking/locations", "/api/tracking/trips/**").permitAll()
                         .requestMatchers(HttpMethod.POST, "/api/seat-holds", "/api/bookings", "/api/complaints", "/api/tickets/verify").permitAll()
                         .anyRequest().authenticated())
                 .addFilterBefore(jwtFilter, UsernamePasswordAuthenticationFilter.class).build();

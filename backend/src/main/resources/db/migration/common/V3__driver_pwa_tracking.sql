@@ -1,0 +1,4 @@
+ALTER TABLE drivers ADD COLUMN user_id UUID;
+CREATE UNIQUE INDEX idx_driver_user_id ON drivers(user_id);
+ALTER TABLE trips ADD COLUMN started_at TIMESTAMP WITH TIME ZONE;
+ALTER TABLE trips ADD COLUMN ended_at TIMESTAMP WITH TIME ZONE;
