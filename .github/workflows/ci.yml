@@ -54,58 +54,96 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-      - name: Wait for Render deployment and verify health
+      - name: Diagnose Render health
+        id: health
+        continue-on-error: true
         shell: bash
         run: |
-          set -euo pipefail
+          set +e
           base="https://busbd-intelligence.onrender.com"
-          healthy="false"
-          for attempt in $(seq 1 24); do
-            echo "Render health attempt ${attempt}/24"
-            if response=$(curl --fail --silent --show-error --location --max-time 45 "$base/actuator/health"); then
-              echo "$response"
-              if echo "$response" | grep -q '"status"[[:space:]]*:[[:space:]]*"UP"'; then
-                healthy="true"
-                break
-              fi
+          host="busbd-intelligence.onrender.com"
+          getent ahostsv4 "$host" > render-dns.txt 2>&1
+          dns_status=$?
+          echo "$dns_status" > render-dns-status.txt
+          success="false"
+          : > render-health-body.txt
+          : > render-health-error.txt
+          echo "000" > render-health-code.txt
+          for attempt in $(seq 1 6); do
+            code=$(curl --silent --show-error --location --max-time 30 -o render-health-body.txt -w '%{http_code}' "$base/actuator/health" 2>render-health-error.txt)
+            echo "$code" > render-health-code.txt
+            if [ "$code" = "200" ] && grep -q '"status"[[:space:]]*:[[:space:]]*"UP"' render-health-body.txt; then
+              success="true"
+              break
             fi
-            sleep 20
+            sleep 15
           done
-          test "$healthy" = "true"
+          echo "$success" > render-health-success.txt
+          test "$success" = "true"
       - name: Verify homepage and public API
+        id: public
+        if: steps.health.outcome == 'success'
+        continue-on-error: true
         shell: bash
         run: |
-          set -euo pipefail
+          set +e
           base="https://busbd-intelligence.onrender.com"
-          homepage=$(curl --fail --silent --show-error --location --max-time 45 "$base/")
-          echo "$homepage" | grep -q "BusBD Intelligence"
-          summary=$(curl --fail --silent --show-error --location --max-time 45 "$base/api/public/summary")
-          echo "$summary"
-          echo "$summary" | grep -q '"networkStatus"'
+          home_code=$(curl --silent --show-error --location --max-time 30 -o render-homepage.txt -w '%{http_code}' "$base/" 2>render-homepage-error.txt)
+          api_code=$(curl --silent --show-error --location --max-time 30 -o render-summary.txt -w '%{http_code}' "$base/api/public/summary" 2>render-summary-error.txt)
+          echo "$home_code" > render-homepage-code.txt
+          echo "$api_code" > render-summary-code.txt
+          test "$home_code" = "200"
+          grep -q "BusBD Intelligence" render-homepage.txt
+          test "$api_code" = "200"
+          grep -q '"networkStatus"' render-summary.txt
       - name: Publish production verification result
         if: always()
         shell: bash
         env:
-          RESULT: ${{ job.status }}
           CHECKED_SHA: ${{ github.sha }}
           RUN_ID: ${{ github.run_id }}
+          HEALTH_OUTCOME: ${{ steps.health.outcome }}
+          PUBLIC_OUTCOME: ${{ steps.public.outcome }}
         run: |
           set -euo pipefail
           checked_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+          export CHECKED_AT="$checked_at"
+          python3 - <<'PY'
+          import json, os
+          from pathlib import Path
+          def read(name, limit=2000):
+              path = Path(name)
+              return path.read_text(errors='replace')[:limit].strip() if path.exists() else ''
+          health_ok = os.getenv('HEALTH_OUTCOME') == 'success'
+          public_ok = os.getenv('PUBLIC_OUTCOME') == 'success'
+          result = {
+              'service': 'busbd-intelligence',
+              'url': 'https://busbd-intelligence.onrender.com/',
+              'status': 'success' if health_ok and public_ok else 'failure',
+              'checkedCommit': os.getenv('CHECKED_SHA'),
+              'checkedAt': os.getenv('CHECKED_AT'),
+              'workflowRunId': os.getenv('RUN_ID'),
+              'dnsStatus': read('render-dns-status.txt'),
+              'dnsResult': read('render-dns.txt'),
+              'healthOutcome': os.getenv('HEALTH_OUTCOME'),
+              'healthHttpCode': read('render-health-code.txt'),
+              'healthBody': read('render-health-body.txt'),
+              'healthError': read('render-health-error.txt'),
+              'publicOutcome': os.getenv('PUBLIC_OUTCOME'),
+              'homepageHttpCode': read('render-homepage-code.txt'),
+              'homepageError': read('render-homepage-error.txt'),
+              'summaryHttpCode': read('render-summary-code.txt'),
+              'summaryBody': read('render-summary.txt'),
+              'summaryError': read('render-summary-error.txt')
+          }
+          Path('render-smoke.json').write_text(json.dumps(result, indent=2) + '\n')
+          PY
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git checkout --orphan deployment-status-work
           git rm -rf . >/dev/null 2>&1 || true
-          cat > render-smoke.json <<JSON
-          {
-            "service": "busbd-intelligence",
-            "url": "https://busbd-intelligence.onrender.com/",
-            "status": "$RESULT",
-            "checkedCommit": "$CHECKED_SHA",
-            "checkedAt": "$checked_at",
-            "workflowRunId": "$RUN_ID"
-          }
-          JSON
           git add render-smoke.json
           git commit -m "Record Render production verification"
           git push --force origin HEAD:deployment-status
+          test "$HEALTH_OUTCOME" = "success"
+          test "$PUBLIC_OUTCOME" = "success"
