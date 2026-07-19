@@ -18,6 +18,13 @@ jobs:
         with:
           node-version: 22
       - run: npm install
+      - run: node scripts/materialize-v23.mjs
+      - name: Upload materialized V2.3 source
+        uses: actions/upload-artifact@v4
+        with:
+          name: v23-materialized-source
+          path: frontend/src
+          retention-days: 1
       - run: npm run build
 
   backend:
