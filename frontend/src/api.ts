@@ -23,6 +23,7 @@ export const api = {
   hold: (tripId: string, seats: string[], ownerEmail: string) => request<{ id: string; expiresAt: string }>('/api/seat-holds', { method: 'POST', body: JSON.stringify({ tripId, seats, ownerEmail }) }),
   book: (payload: object) => request<Record<string, any>>('/api/bookings', { method: 'POST', body: JSON.stringify(payload) }),
   booking: (reference: string) => request<Record<string, any>>(`/api/bookings/${reference}`),
+  cancelBooking: (reference: string) => request<Record<string, any>>(`/api/bookings/${reference}/cancel`, { method: 'POST' }),
   locations: () => request<Location[]>('/api/tracking/locations'),
   complaint: (payload: object) => request('/api/complaints', { method: 'POST', body: JSON.stringify(payload) }),
   login: (email: string, password: string) => request<{ token: string; user: User }>('/api/auth/login', { method: 'POST', body: JSON.stringify({ email, password }) }),
