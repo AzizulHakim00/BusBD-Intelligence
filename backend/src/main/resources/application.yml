@@ -49,6 +49,9 @@ management:
   endpoint:
     health:
       show-details: always
+  health:
+    redis:
+      enabled: ${REDIS_HEALTH_ENABLED:false}
 
 springdoc:
   swagger-ui:
