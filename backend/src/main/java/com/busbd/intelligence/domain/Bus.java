@@ -23,6 +23,10 @@ public class Bus {
     private boolean active = true;
     private String amenities;
     private double healthScore = 92.0;
+    @Column(nullable = false, length = 30)
+    private String seatLayout = "2X2";
+    private String womenReservedSeats;
+    private String blockedSeats;
 
     public Bus(UUID operatorId, String registrationNumber, String model, String coachType, int seatCount) {
         this.operatorId = operatorId; this.registrationNumber = registrationNumber;

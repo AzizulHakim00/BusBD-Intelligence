@@ -17,10 +17,16 @@ public class RoutePlan {
     private double distanceKm;
     @Column(length = 1200)
     private String stopsCsv;
+    @Column(length = 1200)
+    private String boardingPointsCsv;
+    @Column(length = 1200)
+    private String droppingPointsCsv;
     private boolean active = true;
 
     public RoutePlan(String origin, String destination, double distanceKm, String stopsCsv) {
         this.origin = origin; this.destination = destination;
         this.distanceKm = distanceKm; this.stopsCsv = stopsCsv;
+        this.boardingPointsCsv = origin;
+        this.droppingPointsCsv = destination;
     }
 }

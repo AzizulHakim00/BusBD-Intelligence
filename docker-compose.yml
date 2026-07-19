@@ -37,11 +37,10 @@ services:
       DATABASE_URL: jdbc:postgresql://postgres:5432/busbd
       DATABASE_USERNAME: busbd
       DATABASE_PASSWORD: busbd
-      DATABASE_DRIVER: org.postgresql.Driver
-      REDIS_HOST: redis
-      REDIS_PORT: 6379
+      REDIS_URL: redis://redis:6379
       ML_SERVICE_URL: http://ml-service:8000
       JWT_SECRET: local-development-secret-change-before-production-123456789
+      TICKET_SECRET: local-ticket-secret-change-before-production-123456789
       DEMO_MODE: "true"
     depends_on:
       postgres:

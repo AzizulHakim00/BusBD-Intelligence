@@ -1,4 +1,17 @@
+databases:
+  - name: busbd-postgres
+    plan: free
+    databaseName: busbd
+    user: busbd
+
 services:
+  - type: keyvalue
+    name: busbd-redis
+    plan: free
+    ipAllowList: []
+    maxmemoryPolicy: noeviction
+    persistenceMode: off
+
   - type: web
     name: busbd-intelligence
     runtime: docker
@@ -7,9 +20,40 @@ services:
     healthCheckPath: /actuator/health
     autoDeployTrigger: commit
     envVars:
+      - key: SPRING_PROFILES_ACTIVE
+        value: render
+      - key: DB_HOST
+        fromDatabase:
+          name: busbd-postgres
+          property: host
+      - key: DB_PORT
+        fromDatabase:
+          name: busbd-postgres
+          property: port
+      - key: DB_NAME
+        fromDatabase:
+          name: busbd-postgres
+          property: database
+      - key: DB_USER
+        fromDatabase:
+          name: busbd-postgres
+          property: user
+      - key: DB_PASSWORD
+        fromDatabase:
+          name: busbd-postgres
+          property: password
+      - key: REDIS_URL
+        fromService:
+          type: keyvalue
+          name: busbd-redis
+          property: connectionString
       - key: JWT_SECRET
+        generateValue: true
+      - key: TICKET_SECRET
         generateValue: true
       - key: DEMO_MODE
         value: "true"
+      - key: DB_POOL_MAX
+        value: "5"
       - key: JAVA_OPTS
         value: -XX:MaxRAMPercentage=75.0

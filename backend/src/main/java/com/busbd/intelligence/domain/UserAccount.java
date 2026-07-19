@@ -21,8 +21,16 @@ public class UserAccount {
     private String role;
     @Column(nullable = false)
     private boolean active = true;
+    @Column(nullable = false)
+    private boolean emailVerified = false;
+    private String phone;
+    private String emergencyContact;
+    @Column(nullable = false, length = 10)
+    private String preferredLanguage = "EN";
     @Column(nullable = false, updatable = false)
     private Instant createdAt = Instant.now();
+    @Column(nullable = false)
+    private Instant updatedAt = Instant.now();
 
     public UserAccount(String fullName, String email, String passwordHash, String role) {
         this.fullName = fullName;
@@ -30,4 +38,7 @@ public class UserAccount {
         this.passwordHash = passwordHash;
         this.role = role;
     }
+
+    @PreUpdate
+    void touch() { updatedAt = Instant.now(); }
 }
