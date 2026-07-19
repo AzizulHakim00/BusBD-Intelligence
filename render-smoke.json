@@ -1,0 +1,20 @@
+{
+  "service": "busbd-intelligence",
+  "url": "https://busbd-intelligence.onrender.com/",
+  "status": "failure",
+  "checkedCommit": "3dc3dfa0ffebb2c141762af9fdd876d69cf9293e",
+  "checkedAt": "2026-07-19T04:20:23Z",
+  "workflowRunId": "29672590477",
+  "dnsStatus": "0",
+  "dnsResult": "216.24.57.8     STREAM gcp-us-west1-1.origin.onrender.com.cdn.cloudflare.net\n216.24.57.8     DGRAM  \n216.24.57.8     RAW    \n216.24.57.9     STREAM \n216.24.57.9     DGRAM  \n216.24.57.9     RAW",
+  "healthOutcome": "failure",
+  "healthHttpCode": "503",
+  "healthBody": "{\"status\":\"DOWN\",\"groups\":[\"liveness\",\"readiness\"],\"components\":{\"db\":{\"status\":\"UP\",\"details\":{\"database\":\"H2\",\"validationQuery\":\"isValid()\"}},\"diskSpace\":{\"status\":\"UP\",\"details\":{\"total\":414921494528,\"free\":80631246848,\"threshold\":10485760,\"path\":\"/app/.\",\"exists\":true}},\"livenessState\":{\"status\":\"UP\"},\"ping\":{\"status\":\"UP\"},\"readinessState\":{\"status\":\"UP\"},\"redis\":{\"status\":\"DOWN\",\"details\":{\"error\":\"org.springframework.data.redis.RedisConnectionFailureException: Unable to connect to Redis\"}},\"ssl\":{\"status\":\"UP\",\"details\":{\"validChains\":[],\"invalidChains\":[]}}}}",
+  "healthError": "",
+  "publicOutcome": "skipped",
+  "homepageHttpCode": "",
+  "homepageError": "",
+  "summaryHttpCode": "",
+  "summaryBody": "",
+  "summaryError": ""
+}
