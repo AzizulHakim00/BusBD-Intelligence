@@ -1,0 +1,77 @@
+import { FormEvent, useEffect, useMemo, useRef, useState } from 'react'
+import L from 'leaflet'
+import { api, saveToken, token } from './api'
+import type { BookingView, DriverAssignment, Location, PassengerInput, Seat, Trip, User } from './types'
+
+type Page = 'search' | 'tracking' | 'trips' | 'support' | 'account' | 'driver' | 'operations'
+type Notice = { text: string; tone?: 'normal' | 'error' }
+
+const cities = ['Dhaka', 'Chattogram', 'Sylhet', 'Rajshahi', "Cox's Bazar"]
+const money = (value: number | string) => `৳${Number(value || 0).toLocaleString('en-BD')}`
+const clock = (value: string) => new Date(value).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })
+const dateTime = (value: string) => new Date(value).toLocaleString('en-BD', { dateStyle: 'medium', timeStyle: 'short' })
+const operatorCode = (name: string) => name.split(/\s+/).map(part => part[0]).join('').slice(0, 2).toUpperCase()
+const duration = (start: string, end: string) => {
+  const minutes = Math.max(0, Math.round((new Date(end).getTime() - new Date(start).getTime()) / 60000))
+  return `${Math.floor(minutes / 60)}h ${minutes % 60}m`
+}
+const idempotency = () => `WEB-${Date.now()}-${Math.random().toString(36).slice(2)}`
+
+export default function AppV23() {
+  const [page, setPage] = useState<Page>('search')
+  const [user, setUser] = useState<User | null>(null)
+  const [notice, setNotice] = useState<Notice | null>(null)
+  const [language, setLanguage] = useState<'EN' | 'বাংলা'>('EN')
+  const [busy, setBusy] = useState(false)
+
+  useEffect(() => {
+    if (!token()) return
+    api.me().then(setUser).catch(() => saveToken(null))
+  }, [])
+
+  const showNotice = (text: string, tone: Notice['tone'] = 'normal') => {
+    setNotice({ text, tone })
+    window.setTimeout(() => setNotice(current => current?.text === text ? null : current), 5000)
+  }
+  const go = (next: Page) => { setPage(next); window.scrollTo({ top: 0, behavior: 'smooth' }) }
+  const onAuth = (result: { token: string; user: User; message?: string }) => {
+    saveToken(result.token); setUser(result.user); showNotice(result.message || 'Signed in successfully.')
+  }
+  const logout = () => { saveToken(null); setUser(null); setPage('search'); showNotice('Signed out.') }
+
+  return <main className="site-shell">
+    {busy && <div className="loading-line" />}
+    <Topbar page={page} language={language} setLanguage={setLanguage} go={go} user={user} logout={logout} />
+    {notice && <div className={`notice-bar ${notice.tone === 'error' ? 'error' : ''}`}><span>{notice.text}</span><button onClick={() => setNotice(null)}>×</button></div>}
+    {page === 'search' && <SearchPage go={go} user={user} showNotice={showNotice} setBusy={setBusy} />}
+    {page === 'tracking' && <TrackingPage />}
+    {page === 'trips' && <TripsPage user={user} go={go} showNotice={showNotice} setBusy={setBusy} />}
+    {page === 'support' && <SupportPage user={user} showNotice={showNotice} setBusy={setBusy} />}
+    {page === 'account' && <AccountPage user={user} onAuth={onAuth} setUser={setUser} showNotice={showNotice} setBusy={setBusy} />}
+    {page === 'driver' && <DriverPage user={user} onAuth={onAuth} showNotice={showNotice} setBusy={setBusy} />}
+    {page === 'operations' && <OperationsPage user={user} onAuth={onAuth} showNotice={showNotice} />}
+    <footer className="v23-footer"><strong>BusBD Intelligence</strong><span>Passenger booking · Live tracking · Driver PWA · Enterprise operations</span><a href="/swagger-ui.html">API documentation</a></footer>
+  </main>
+}
+
+function Topbar({ page, language, setLanguage, go, user, logout }: { page: Page; language: 'EN' | 'বাংলা'; setLanguage: (value: 'EN' | 'বাংলা') => void; go: (page: Page) => void; user: User | null; logout: () => void }) {
+  const nav: Array<{ id: Page; label: string }> = [
+    { id: 'search', label: 'Search' }, { id: 'tracking', label: 'Live tracking' }, { id: 'trips', label: 'My trips' }, { id: 'support', label: 'Support' }
+  ]
+  return <header className="topbar">
+    <button className="brand" onClick={() => go('search')}><span className="brand-mark"><i /><i /><i /></span><span>BusBD <strong>Intelligence</strong></span></button>
+    <nav className="main-nav">{nav.map(item => <button key={item.id} className={page === item.id ? 'active' : ''} onClick={() => go(item.id)}>{item.label}</button>)}</nav>
+    <div className="header-actions">
+      <button className="language" onClick={() => setLanguage(language === 'EN' ? 'বাংলা' : 'EN')}>◎ {language === 'EN' ? 'বাংলা / EN' : 'EN / বাংলা'}</button>
+      <button className="language" onClick={() => go(user?.role === 'DRIVER' ? 'driver' : 'account')}>{user ? user.name.split(' ')[0] : 'Account'}</button>
+      {user?.role === 'DRIVER' && <button className="ops-button" onClick={() => go('driver')}><span className="live-dot" /> Driver</button>}
+      {user && user.role !== 'PASSENGER' && user.role !== 'DRIVER' && <button className="ops-button" onClick={() => go('operations')}><span className="live-dot" /> Operations</button>}
+      {user && <button className="language" onClick={logout}>Sign out</button>}
+    </div>
+  </header>
+}
+
+function SearchPage({ go, user, showNotice, setBusy }: { go: (page: Page) => void; user: User | null; showNotice: (message: string, tone?: Notice['tone']) => void; setBusy: (busy: boolean) => void }) {
+  const [origin, setOrigin] = useState('Dhaka')
+  const [destination, setDestination] = useState('Chattogram')
+  const [travelDate, setTravelDate] = useState(() => new Date(Date.now()
