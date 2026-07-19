@@ -6,6 +6,9 @@ on:
   pull_request:
     branches: [main]
 
+permissions:
+  contents: write
+
 jobs:
   frontend:
     runs-on: ubuntu-latest
@@ -48,14 +51,17 @@ jobs:
     runs-on: ubuntu-latest
     needs: [container]
     steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - name: Wait for Render deployment and verify health
         shell: bash
         run: |
           set -euo pipefail
           base="https://busbd-intelligence.onrender.com"
           healthy="false"
-          for attempt in $(seq 1 36); do
-            echo "Render health attempt ${attempt}/36"
+          for attempt in $(seq 1 24); do
+            echo "Render health attempt ${attempt}/24"
             if response=$(curl --fail --silent --show-error --location --max-time 45 "$base/actuator/health"); then
               echo "$response"
               if echo "$response" | grep -q '"status"[[:space:]]*:[[:space:]]*"UP"'; then
@@ -76,3 +82,30 @@ jobs:
           summary=$(curl --fail --silent --show-error --location --max-time 45 "$base/api/public/summary")
           echo "$summary"
           echo "$summary" | grep -q '"networkStatus"'
+      - name: Publish production verification result
+        if: always()
+        shell: bash
+        env:
+          RESULT: ${{ job.status }}
+          CHECKED_SHA: ${{ github.sha }}
+          RUN_ID: ${{ github.run_id }}
+        run: |
+          set -euo pipefail
+          checked_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git checkout --orphan deployment-status-work
+          git rm -rf . >/dev/null 2>&1 || true
+          cat > render-smoke.json <<JSON
+          {
+            "service": "busbd-intelligence",
+            "url": "https://busbd-intelligence.onrender.com/",
+            "status": "$RESULT",
+            "checkedCommit": "$CHECKED_SHA",
+            "checkedAt": "$checked_at",
+            "workflowRunId": "$RUN_ID"
+          }
+          JSON
+          git add render-smoke.json
+          git commit -m "Record Render production verification"
+          git push --force origin HEAD:deployment-status
