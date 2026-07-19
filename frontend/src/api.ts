@@ -21,7 +21,7 @@ export const api = {
   trips: (origin = '', destination = '') => request<Trip[]>(`/api/public/trips?origin=${encodeURIComponent(origin)}&destination=${encodeURIComponent(destination)}`),
   seats: (tripId: string) => request<{ seats: Seat[]; seatCount: number; coachType: string; seatLayout: string; lockMinutes: number }>(`/api/trips/${tripId}/seats`),
   hold: (tripId: string, seats: string[], ownerEmail: string) => request<{ id: string; expiresAt: string }>('/api/seat-holds', { method: 'POST', body: JSON.stringify({ tripId, seats, ownerEmail }) }),
-  book: (payload: { holdId: string; passengerName: string; passengerEmail: string; passengerPhone: string; paymentProvider: string; boardingPoint: string; droppingPoint: string; promoCode?: string; idempotencyKey: string; passengers: PassengerInput[] }) => request<BookingView>('/api/bookings', { method: 'POST', headers: { 'Idempotency-Key': payload.idempotencyKey }, body: JSON.stringify(payload) }),
+  book: (payload: { holdId: string; passengerName: string; passengerEmail: string; passengerPhone: string; paymentProvider: string; boardingPoint?: string; droppingPoint?: string; promoCode?: string; idempotencyKey?: string; passengers?: PassengerInput[] }) => request<BookingView>('/api/bookings', { method: 'POST', headers: payload.idempotencyKey ? { 'Idempotency-Key': payload.idempotencyKey } : {}, body: JSON.stringify(payload) }),
   booking: (reference: string) => request<BookingView>(`/api/bookings/${reference}`),
   myBookings: () => request<BookingView[]>('/api/bookings'),
   cancelBooking: (reference: string, reason = 'Passenger cancellation') => request<BookingView>(`/api/bookings/${reference}/cancel`, { method: 'POST', body: JSON.stringify({ reason }) }),
