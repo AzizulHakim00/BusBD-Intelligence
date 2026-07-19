@@ -4,9 +4,7 @@
   "version": "2.2.0",
   "type": "module",
   "scripts": {
-    "predev": "node scripts/materialize-v2.mjs",
     "dev": "vite",
-    "prebuild": "node scripts/materialize-v2.mjs",
     "build": "tsc -b && vite build",
     "preview": "vite preview --host 0.0.0.0"
   },
