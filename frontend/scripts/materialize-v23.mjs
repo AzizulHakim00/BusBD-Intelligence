@@ -1,5 +1,5 @@
 import { gunzipSync } from 'node:zlib'
-import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
+import { mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { dirname, resolve } from 'node:path'
 
 const root = resolve(import.meta.dirname, '..')
@@ -10,6 +10,9 @@ for (const [relative, content] of Object.entries(files)) {
   mkdirSync(dirname(target), { recursive: true })
   writeFileSync(target, content, 'utf8')
 }
+
+// V2.3 replaces the former App.tsx entry point; removing it also keeps strict TypeScript builds clean.
+rmSync(resolve(root, 'src', 'App.tsx'), { force: true })
 
 // Leaflet CircleMarker radius is updated through setRadius, not Path.setStyle.
 const appPath = resolve(root, 'src', 'AppV23.tsx')
