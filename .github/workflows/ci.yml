@@ -42,3 +42,37 @@ jobs:
           context: .
           push: false
           tags: busbd-intelligence:ci
+
+  render-smoke:
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    needs: [container]
+    steps:
+      - name: Wait for Render deployment and verify health
+        shell: bash
+        run: |
+          set -euo pipefail
+          base="https://busbd-intelligence.onrender.com"
+          healthy="false"
+          for attempt in $(seq 1 36); do
+            echo "Render health attempt ${attempt}/36"
+            if response=$(curl --fail --silent --show-error --location --max-time 45 "$base/actuator/health"); then
+              echo "$response"
+              if echo "$response" | grep -q '"status"[[:space:]]*:[[:space:]]*"UP"'; then
+                healthy="true"
+                break
+              fi
+            fi
+            sleep 20
+          done
+          test "$healthy" = "true"
+      - name: Verify homepage and public API
+        shell: bash
+        run: |
+          set -euo pipefail
+          base="https://busbd-intelligence.onrender.com"
+          homepage=$(curl --fail --silent --show-error --location --max-time 45 "$base/")
+          echo "$homepage" | grep -q "BusBD Intelligence"
+          summary=$(curl --fail --silent --show-error --location --max-time 45 "$base/api/public/summary")
+          echo "$summary"
+          echo "$summary" | grep -q '"networkStatus"'
