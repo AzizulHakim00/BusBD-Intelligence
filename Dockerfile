@@ -1,7 +1,7 @@
 FROM node:22-alpine AS frontend-build
 WORKDIR /frontend
-COPY frontend/package.json frontend/package-lock.json* ./
-RUN npm install
+COPY frontend/package.json ./
+RUN npm install --no-audit --no-fund
 COPY frontend/ ./
 RUN npm run build
 
@@ -17,10 +17,12 @@ RUN rm -rf ./src/main/resources/static \
     && mkdir -p ./src/main/resources/static
 COPY --from=frontend-build /frontend/dist/ ./src/main/resources/static/
 
-# Reject the separate dark V2.3 portal and verify the HAR copy is present.
+# Reject the separate dark V2.3 portal and verify all required public files.
 RUN test -f ./src/main/resources/static/index.html \
     && test -f ./src/main/resources/static/favicon.svg \
+    && test -f ./src/main/resources/static/deployment.json \
     && grep -R -q "trusted buses across Bangladesh" ./src/main/resources/static \
+    && grep -q '"frontend": "functional-har-design"' ./src/main/resources/static/deployment.json \
     && ! grep -R -q "secure seat locking" ./src/main/resources/static \
     && ! grep -q 'src="/app/' ./src/main/resources/static/index.html
 
@@ -32,7 +34,9 @@ RUN rm -rf /tmp/jar-check \
     && cd /tmp/jar-check \
     && jar xf /workspace/target/busbd-intelligence-1.0.0.jar \
     && test -f BOOT-INF/classes/static/index.html \
+    && test -f BOOT-INF/classes/static/deployment.json \
     && grep -R -q "trusted buses across Bangladesh" BOOT-INF/classes/static \
+    && grep -q '"frontend": "functional-har-design"' BOOT-INF/classes/static/deployment.json \
     && ! grep -R -q "secure seat locking" BOOT-INF/classes/static \
     && ! grep -q 'src="/app/' BOOT-INF/classes/static/index.html
 
@@ -42,5 +46,7 @@ RUN addgroup -S busbd && adduser -S busbd -G busbd
 COPY --from=backend-build /workspace/target/busbd-intelligence-1.0.0.jar app.jar
 USER busbd
 EXPOSE 8080
-ENV JAVA_OPTS="-XX:MaxRAMPercentage=75.0"
+ENV JAVA_OPTS="-XX:MaxRAMPercentage=72.0"
+HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=5 \
+  CMD wget -qO- "http://127.0.0.1:${PORT:-8080}/actuator/health" | grep -q '"status":"UP"' || exit 1
 ENTRYPOINT ["sh", "-c", "java $JAVA_OPTS -jar app.jar"]
