@@ -23,7 +23,7 @@ public class SecurityConfig {
                 .headers(headers -> headers.frameOptions(frame -> frame.sameOrigin()))
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(auth -> auth
-                        .requestMatchers("/", "/index.html", "/assets/**", "/favicon.svg", "/error").permitAll()
+                        .requestMatchers("/", "/index.html", "/assets/**", "/app/**", "/favicon.svg", "/error").permitAll()
                         .requestMatchers("/api/auth/login", "/api/auth/register", "/api/public/**", "/ws/**").permitAll()
                         .requestMatchers("/swagger-ui/**", "/swagger-ui.html", "/api-docs/**", "/actuator/health", "/h2-console/**").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/trips/**", "/api/bookings/{reference}", "/api/tracking/locations", "/api/tracking/trips/**").permitAll()
