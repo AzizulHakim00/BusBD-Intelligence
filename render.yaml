@@ -1,9 +1,3 @@
-databases:
-  - name: busbd-postgres
-    plan: free
-    databaseName: busbd
-    user: busbd
-
 services:
   - type: keyvalue
     name: busbd-redis
@@ -20,40 +14,34 @@ services:
     healthCheckPath: /actuator/health
     autoDeployTrigger: commit
     envVars:
+      # The production service uses the existing Neon PostgreSQL database.
+      # Secret values stay in Render and are never committed to GitHub.
       - key: SPRING_PROFILES_ACTIVE
-        value: render
-      - key: DB_HOST
-        fromDatabase:
-          name: busbd-postgres
-          property: host
-      - key: DB_PORT
-        fromDatabase:
-          name: busbd-postgres
-          property: port
-      - key: DB_NAME
-        fromDatabase:
-          name: busbd-postgres
-          property: database
-      - key: DB_USER
-        fromDatabase:
-          name: busbd-postgres
-          property: user
-      - key: DB_PASSWORD
-        fromDatabase:
-          name: busbd-postgres
-          property: password
+        value: postgres
+      - key: DATABASE_URL
+        sync: false
+      - key: DATABASE_USERNAME
+        sync: false
+      - key: DATABASE_PASSWORD
+        sync: false
       - key: REDIS_URL
         fromService:
           type: keyvalue
           name: busbd-redis
           property: connectionString
       - key: JWT_SECRET
-        generateValue: true
+        sync: false
       - key: TICKET_SECRET
-        generateValue: true
+        sync: false
       - key: DEMO_MODE
         value: "true"
       - key: DB_POOL_MAX
         value: "5"
+      - key: DB_POOL_MIN
+        value: "1"
+      - key: H2_CONSOLE_ENABLED
+        value: "false"
+      - key: REDIS_HEALTH_ENABLED
+        value: "false"
       - key: JAVA_OPTS
-        value: -XX:MaxRAMPercentage=75.0
+        value: -XX:MaxRAMPercentage=72.0
