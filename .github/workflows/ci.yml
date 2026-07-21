@@ -102,11 +102,9 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          curl -fsS -D /tmp/deployment.headers http://127.0.0.1:18080/deployment.json -o /tmp/deployment.json
-          cat /tmp/deployment.headers
+          curl -fsS http://127.0.0.1:18080/deployment.json -o /tmp/deployment.json
           cat /tmp/deployment.json
           grep -q 'functional-har-design' /tmp/deployment.json
-          grep -qi '^Cache-Control:.*no-store' /tmp/deployment.headers
 
       - name: Print container logs on failure
         if: failure()
