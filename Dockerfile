@@ -11,13 +11,12 @@ COPY backend/pom.xml ./pom.xml
 RUN mvn -B -q dependency:go-offline
 COPY backend/src ./src
 
-# The editable React application is the production homepage. It preserves the
-# supplied HAR visual language and connects directly to the Spring Boot APIs.
+# Package the editable, functional HAR-styled React application at the root.
 RUN rm -rf ./src/main/resources/static \
     && mkdir -p ./src/main/resources/static
 COPY --from=frontend-build /frontend/dist/ ./src/main/resources/static/
 
-# Reject the separate dark V2.3 portal and verify all required public files.
+# Reject the obsolete dark portal and verify required public files.
 RUN test -f ./src/main/resources/static/index.html \
     && test -f ./src/main/resources/static/favicon.svg \
     && test -f ./src/main/resources/static/deployment.json \
@@ -28,7 +27,7 @@ RUN test -f ./src/main/resources/static/index.html \
 
 RUN mvn -B -DskipTests package
 
-# Verify the actual packaged application, not only the staging directory.
+# Verify the final Spring Boot JAR contains the same frontend files.
 RUN rm -rf /tmp/jar-check \
     && mkdir -p /tmp/jar-check \
     && cd /tmp/jar-check \
@@ -46,7 +45,10 @@ RUN addgroup -S busbd && adduser -S busbd -G busbd
 COPY --from=backend-build /workspace/target/busbd-intelligence-1.0.0.jar app.jar
 USER busbd
 EXPOSE 8080
-ENV JAVA_OPTS="-XX:MaxRAMPercentage=72.0"
-HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=5 \
-  CMD wget -qO- "http://127.0.0.1:${PORT:-8080}/actuator/health" | grep -q '"status":"UP"' || exit 1
-ENTRYPOINT ["sh", "-c", "java $JAVA_OPTS -jar app.jar"]
+
+# Stay safely below the Render Free memory ceiling and reduce startup pressure.
+ENV JAVA_OPTS="-Xms64m -Xmx256m -XX:+UseSerialGC -XX:ActiveProcessorCount=1 -Djava.security.egd=file:/dev/./urandom"
+
+# Render performs the authoritative HTTP liveness check. A Docker HEALTHCHECK
+# is intentionally omitted so two independent health systems cannot conflict.
+ENTRYPOINT ["sh", "-c", "exec java $JAVA_OPTS -jar app.jar"]
