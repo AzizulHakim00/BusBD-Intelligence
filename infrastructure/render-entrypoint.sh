@@ -3,7 +3,7 @@ set -u
 
 PORT_VALUE="${PORT:-8080}"
 HEALTH_URL="http://127.0.0.1:${PORT_VALUE}/actuator/health"
-PRIMARY_ATTEMPTS="${DATABASE_PRIMARY_STARTUP_ATTEMPTS:-60}"
+PRIMARY_ATTEMPTS="${DATABASE_PRIMARY_STARTUP_ATTEMPTS:-15}"
 APP_PID=""
 
 forward_signal() {
@@ -30,9 +30,16 @@ case ",${SPRING_PROFILES_ACTIVE:-}," in
   *,postgres,*) postgres_profile_active=true ;;
 esac
 
-if [ "${DATABASE_FALLBACK_ENABLED:-false}" != "true" ] || [ "${postgres_profile_active}" != "true" ]; then
+# Existing manually-created Render services do not automatically inherit new
+# render.yaml variables. Therefore fallback is ON by default for the postgres
+# profile and can still be disabled explicitly with DATABASE_FALLBACK_ENABLED=false.
+if [ "${DATABASE_FALLBACK_ENABLED:-true}" != "true" ] || [ "${postgres_profile_active}" != "true" ]; then
   run_java_in_foreground
 fi
+
+# Do not let long remote-database retries consume Render's deployment window.
+export DB_CONNECT_RETRIES="${DATABASE_PRIMARY_CONNECT_RETRIES:-1}"
+export DB_CONNECTION_TIMEOUT="${DATABASE_PRIMARY_CONNECTION_TIMEOUT:-5000}"
 
 echo "BusBD startup: testing the configured PostgreSQL/Neon connection before accepting traffic."
 run_java_in_background
@@ -56,14 +63,11 @@ while [ "${attempt}" -le "${PRIMARY_ATTEMPTS}" ]; do
 done
 
 if kill -0 "${APP_PID}" 2>/dev/null; then
-  echo "BusBD startup: PostgreSQL/Neon did not become healthy in time; stopping the failed primary startup."
+  echo "BusBD startup: PostgreSQL/Neon did not become healthy in time; stopping the primary startup."
   kill -TERM "${APP_PID}" 2>/dev/null || true
   wait "${APP_PID}" 2>/dev/null || true
 fi
 
-# Keep the complete application deployable even when a remote database secret is
-# stale or the external database is temporarily unavailable. This fallback is
-# intentionally enabled only by DATABASE_FALLBACK_ENABLED=true.
 echo "BusBD startup: using the seeded in-memory demo database for this instance."
 export SPRING_PROFILES_ACTIVE="render-fallback"
 export DATABASE_URL="jdbc:h2:mem:busbd;MODE=PostgreSQL;DB_CLOSE_DELAY=-1;DATABASE_TO_LOWER=TRUE"
