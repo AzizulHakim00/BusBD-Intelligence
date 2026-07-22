@@ -1,0 +1,61 @@
+name: BusBD Full Functional Smoke
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  functional-smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build the production Docker image
+        run: docker build --quiet -t busbd-intelligence:full-smoke .
+
+      - name: Start with Render Free-style limits
+        run: |
+          docker run -d --name busbd-full-smoke \
+            -p 8080:8080 \
+            -e PORT=8080 \
+            -e DB_POOL_MAX=3 \
+            -e DB_POOL_MIN=0 \
+            -e REDIS_HEALTH_ENABLED=false \
+            -e H2_CONSOLE_ENABLED=false \
+            -e JAVA_OPTS='-Xms64m -Xmx256m -XX:+UseSerialGC -XX:ActiveProcessorCount=1' \
+            busbd-intelligence:full-smoke
+
+      - name: Verify every critical passenger and operations workflow
+        run: |
+          chmod +x infrastructure/full-smoke-test.sh
+          BUSBD_SMOKE_PROGRESS_LOG=/tmp/busbd-smoke-progress.log infrastructure/full-smoke-test.sh http://127.0.0.1:8080
+
+      - name: Capture application diagnostics
+        if: always()
+        run: docker logs busbd-full-smoke > /tmp/busbd-full-smoke.log 2>&1 || true
+
+      - name: Upload diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: busbd-full-functional-smoke
+          path: |
+            /tmp/busbd-full-smoke.log
+            /tmp/busbd-smoke-progress.log
+            /tmp/busbd-smoke-responses
+          if-no-files-found: warn
+          retention-days: 3
+
+      - name: Print logs on failure
+        if: failure()
+        run: |
+          cat /tmp/busbd-smoke-progress.log 2>/dev/null || true
+          find /tmp/busbd-smoke-responses -maxdepth 1 -type f -print -exec sh -c 'echo "--- $1"; cat "$1"' _ {} \; 2>/dev/null || true
+          docker logs --tail 240 busbd-full-smoke || true
+
+      - name: Stop container
+        if: always()
+        run: docker rm -f busbd-full-smoke 2>/dev/null || true
