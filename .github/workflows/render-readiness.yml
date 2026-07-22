@@ -54,7 +54,7 @@ jobs:
           assert web.get('branch') == 'main'
           assert web.get('region') == 'singapore'
           assert web.get('healthCheckPath') == '/actuator/health/readiness'
-          assert web.get('autoDeployTrigger') == 'commit'
+          assert web.get('autoDeployTrigger') == 'checksPass'
           assert web.get('renderSubdomainPolicy') == 'enabled'
           assert database.get('plan') == 'free'
           assert database.get('region') == web.get('region')
@@ -69,7 +69,12 @@ jobs:
           assert env['REDIS_URL']['fromService'] == {'type': 'keyvalue', 'name': 'busbd-redis', 'property': 'connectionString'}
           assert env['JWT_SECRET'].get('generateValue') is True
           assert env['TICKET_SECRET'].get('generateValue') is True
-          print('Render Blueprint structure is deployment-ready.')
+          assert env['SPRINGDOC_SWAGGER_UI_ENABLED'].get('value') == 'false'
+          assert env['SPRINGDOC_API_DOCS_ENABLED'].get('value') == 'false'
+          assert env['H2_CONSOLE_ENABLED'].get('value') == 'false'
+          assert env['MANAGEMENT_ENDPOINT_HEALTH_SHOW_DETAILS'].get('value') == 'never'
+          assert env['MANAGEMENT_ENDPOINTS_WEB_EXPOSURE_INCLUDE'].get('value') == 'health,info'
+          print('Render Blueprint structure and production hardening are deployment-ready.')
           PY
 
       - name: Validate entrypoint and Render database URL conversion

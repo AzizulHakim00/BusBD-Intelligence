@@ -16,7 +16,7 @@ services:
     plan: free
     dockerfilePath: ./Dockerfile
     healthCheckPath: /actuator/health/readiness
-    autoDeployTrigger: commit
+    autoDeployTrigger: checksPass
     renderSubdomainPolicy: enabled
     envVars:
       - key: SPRING_PROFILES_ACTIVE
@@ -44,6 +44,8 @@ services:
         generateValue: true
       - key: TICKET_SECRET
         generateValue: true
+      - key: JWT_EXPIRATION_MINUTES
+        value: "120"
       - key: DEMO_MODE
         value: "true"
       - key: DATABASE_FALLBACK_ENABLED
@@ -62,6 +64,16 @@ services:
         value: "false"
       - key: REDIS_HEALTH_ENABLED
         value: "false"
+      - key: SPRINGDOC_SWAGGER_UI_ENABLED
+        value: "false"
+      - key: SPRINGDOC_API_DOCS_ENABLED
+        value: "false"
+      - key: MANAGEMENT_ENDPOINTS_WEB_EXPOSURE_INCLUDE
+        value: "health,info"
+      - key: MANAGEMENT_ENDPOINT_HEALTH_SHOW_DETAILS
+        value: "never"
+      - key: SERVER_FORWARD_HEADERS_STRATEGY
+        value: "framework"
       - key: JAVA_OPTS
         value: "-Xms64m -Xmx256m -XX:+UseSerialGC -XX:ActiveProcessorCount=1 -Djava.security.egd=file:/dev/./urandom"
 

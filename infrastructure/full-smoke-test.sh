@@ -103,8 +103,14 @@ TICKET_TOKEN="$(jq -r '.ticketToken // empty' "$WORK_DIR/booking.json")"
 test -n "$REFERENCE"
 test -n "$TICKET_TOKEN"
 jq -e '.status == "CONFIRMED" and .paymentStatus == "PAID" and (.discountAmount | tonumber) > 0' "$WORK_DIR/booking.json" >/dev/null
-curl --fail --silent --show-error "$BASE_URL/api/bookings/$REFERENCE" -o "$WORK_DIR/booking-read.json"
-jq -e --arg reference "$REFERENCE" '.reference == $reference and .status == "CONFIRMED"' "$WORK_DIR/booking-read.json" >/dev/null
+
+log "protecting guest ticket lookup with booking email verification"
+MISSING_EMAIL_CODE="$(curl --silent --show-error --output "$WORK_DIR/lookup-missing-email.json" --write-out '%{http_code}' "$BASE_URL/api/bookings/$REFERENCE")"
+test "$MISSING_EMAIL_CODE" = "400"
+WRONG_EMAIL_CODE="$(curl --silent --show-error --output "$WORK_DIR/lookup-wrong-email.json" --write-out '%{http_code}' --get --data-urlencode 'email=wrong@busbd.local' "$BASE_URL/api/bookings/$REFERENCE")"
+test "$WRONG_EMAIL_CODE" = "404"
+curl --fail --silent --show-error --get --data-urlencode "email=$EMAIL" "$BASE_URL/api/bookings/$REFERENCE" -o "$WORK_DIR/booking-read.json"
+jq -e --arg reference "$REFERENCE" '.reference == $reference and .status == "CONFIRMED" and (has("passengerEmail") | not) and (has("passengerPhone") | not) and (has("passengers") | not) and (has("ticketToken") | not) and (has("paymentReference") | not)' "$WORK_DIR/booking-read.json" >/dev/null
 curl --fail --silent --show-error -H "Authorization: Bearer $PASSENGER_TOKEN" "$BASE_URL/api/bookings" -o "$WORK_DIR/my-bookings.json"
 jq -e --arg reference "$REFERENCE" 'map(.reference) | index($reference) != null' "$WORK_DIR/my-bookings.json" >/dev/null
 

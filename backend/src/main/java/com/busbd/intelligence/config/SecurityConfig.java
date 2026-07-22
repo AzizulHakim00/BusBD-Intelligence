@@ -45,7 +45,7 @@ public class SecurityConfig {
                                 "/h2-console/**"
                         ).permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/trips/**", "/api/bookings/{reference}", "/api/tracking/locations", "/api/tracking/trips/**").permitAll()
-                        .requestMatchers(HttpMethod.POST, "/api/seat-holds", "/api/bookings", "/api/complaints", "/api/tickets/verify").permitAll()
+                        .requestMatchers(HttpMethod.POST, "/api/seat-holds", "/api/bookings", "/api/bookings/{reference}/cancel", "/api/complaints", "/api/tickets/verify").permitAll()
                         .anyRequest().authenticated())
                 .addFilterBefore(jwtFilter, UsernamePasswordAuthenticationFilter.class).build();
     }

@@ -1,8 +1,12 @@
-const CACHE_NAME = 'busbd-shell-2026-07-22-2'
+const CACHE_NAME = 'busbd-shell-2026-07-22-5-hardening'
 const SHELL = ['/', '/favicon.svg', '/manifest.webmanifest', '/deployment.json']
 
 self.addEventListener('install', event => {
-  event.waitUntil(caches.open(CACHE_NAME).then(cache => cache.addAll(SHELL)).then(() => self.skipWaiting()))
+  event.waitUntil(
+    caches.open(CACHE_NAME)
+      .then(cache => cache.addAll(SHELL))
+      .then(() => self.skipWaiting())
+  )
 })
 
 self.addEventListener('activate', event => {
@@ -13,26 +17,30 @@ self.addEventListener('activate', event => {
   )
 })
 
+self.addEventListener('message', event => {
+  if (event.data === 'SKIP_WAITING') self.skipWaiting()
+})
+
 self.addEventListener('fetch', event => {
   const request = event.request
   if (request.method !== 'GET') return
   const url = new URL(request.url)
   if (url.origin !== self.location.origin) return
 
+  // Booking, authentication, live tracking and health data must always come from the network.
   if (url.pathname.startsWith('/api/') || url.pathname.startsWith('/actuator/')) {
-    event.respondWith(fetch(request))
+    event.respondWith(fetch(request, { cache: 'no-store' }))
     return
   }
 
   if (request.mode === 'navigate') {
     event.respondWith(
-      fetch(request)
+      fetch(request, { cache: 'no-store' })
         .then(response => {
-          const copy = response.clone()
-          caches.open(CACHE_NAME).then(cache => cache.put('/', copy))
+          if (response.ok) caches.open(CACHE_NAME).then(cache => cache.put('/', response.clone()))
           return response
         })
-        .catch(() => caches.match('/'))
+        .catch(async () => (await caches.match('/')) || Response.error())
     )
     return
   }
@@ -41,7 +49,9 @@ self.addEventListener('fetch', event => {
     event.respondWith(
       caches.match(request).then(cached => {
         const network = fetch(request).then(response => {
-          if (response.ok) caches.open(CACHE_NAME).then(cache => cache.put(request, response.clone()))
+          if (response.ok && response.type === 'basic') {
+            caches.open(CACHE_NAME).then(cache => cache.put(request, response.clone()))
+          }
           return response
         })
         return cached || network
@@ -50,5 +60,12 @@ self.addEventListener('fetch', event => {
     return
   }
 
-  event.respondWith(caches.match(request).then(cached => cached || fetch(request)))
+  event.respondWith(
+    caches.match(request).then(cached => cached || fetch(request).then(response => {
+      if (response.ok && response.type === 'basic') {
+        caches.open(CACHE_NAME).then(cache => cache.put(request, response.clone()))
+      }
+      return response
+    }))
+  )
 })

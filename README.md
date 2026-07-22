@@ -1,4 +1,4 @@
-# BusBD Intelligence V3.1
+# BusBD Intelligence V3.2
 
 BusBD Intelligence is a Spring Boot and React platform for searching, booking and tracking intercity bus journeys across Bangladesh.
 
@@ -15,6 +15,8 @@ BusBD Intelligence is a Spring Boot and React platform for searching, booking an
 - Saved routes, recent plans and device-local journey watches
 - Journey Guard with emergency contact storage, location capture, itinerary sharing, safety check-ins, SMS handoff and direct 999 calling
 - Installable PWA shell with offline-safe startup while live booking and tracking APIs remain network-only
+- Protected guest ticket lookup using booking reference plus booking email
+- Redacted guest ticket responses that do not expose phone numbers, email addresses, passenger records, payment references or signed ticket tokens
 
 ## Render deployment
 
@@ -24,8 +26,9 @@ The root `render.yaml` is self-contained. A single Blueprint deployment creates:
 - a free Render PostgreSQL database
 - a free Redis-compatible Key Value service
 - generated JWT and ticket-signing secrets
-- automatic deployment from the `main` branch
+- deployment from `main` only after GitHub checks pass
 - readiness health checks and an H2 fallback if PostgreSQL is temporarily unavailable
+- private production health details with Swagger, API docs and the H2 console disabled
 
 Use the **Deploy to Render** button above and approve the Blueprint in the Render account that should own the service. No database URL or application secret needs to be entered manually.
 
