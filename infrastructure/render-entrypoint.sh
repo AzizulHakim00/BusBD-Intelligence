@@ -4,6 +4,10 @@ set -u
 PORT_VALUE="${PORT:-8080}"
 HEALTH_URL="http://127.0.0.1:${PORT_VALUE}/actuator/health"
 PRIMARY_ATTEMPTS="${DATABASE_PRIMARY_STARTUP_ATTEMPTS:-15}"
+case "${PRIMARY_ATTEMPTS}" in
+  ''|*[!0-9]*) PRIMARY_ATTEMPTS=15 ;;
+esac
+if [ "${PRIMARY_ATTEMPTS}" -gt 15 ]; then PRIMARY_ATTEMPTS=15; fi
 APP_PID=""
 
 forward_signal() {
