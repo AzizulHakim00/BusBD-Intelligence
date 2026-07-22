@@ -31,7 +31,7 @@ jobs:
       - name: Verify every critical passenger and operations workflow
         run: |
           chmod +x infrastructure/full-smoke-test.sh
-          infrastructure/full-smoke-test.sh http://127.0.0.1:8080
+          BUSBD_SMOKE_PROGRESS_LOG=/tmp/busbd-smoke-progress.log infrastructure/full-smoke-test.sh http://127.0.0.1:8080
 
       - name: Capture application diagnostics
         if: always()
@@ -42,13 +42,17 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: busbd-full-functional-smoke
-          path: /tmp/busbd-full-smoke.log
+          path: |
+            /tmp/busbd-full-smoke.log
+            /tmp/busbd-smoke-progress.log
           if-no-files-found: warn
           retention-days: 3
 
       - name: Print logs on failure
         if: failure()
-        run: docker logs --tail 240 busbd-full-smoke || true
+        run: |
+          cat /tmp/busbd-smoke-progress.log 2>/dev/null || true
+          docker logs --tail 240 busbd-full-smoke || true
 
       - name: Stop container
         if: always()
