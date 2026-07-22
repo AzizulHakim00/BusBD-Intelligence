@@ -1,9 +1,22 @@
 #!/usr/bin/env bash
-set -euo pipefail
+set -Eeuo pipefail
 
 BASE_URL="${1:-http://127.0.0.1:8080}"
 WORK_DIR="$(mktemp -d)"
-trap 'rm -rf "$WORK_DIR"' EXIT
+PROGRESS_LOG="${BUSBD_SMOKE_PROGRESS_LOG:-/tmp/busbd-smoke-progress.log}"
+: > "$PROGRESS_LOG"
+exec > >(tee -a "$PROGRESS_LOG") 2>&1
+
+cleanup() { rm -rf "$WORK_DIR"; }
+on_error() {
+  local status=$?
+  echo "[BusBD smoke] FAILED at line ${BASH_LINENO[0]} with status ${status}"
+  echo "[BusBD smoke] temporary response files:"
+  find "$WORK_DIR" -maxdepth 1 -type f -printf '%f\n' 2>/dev/null || true
+  exit "$status"
+}
+trap cleanup EXIT
+trap on_error ERR
 
 log() { printf '\n[BusBD smoke] %s\n' "$1"; }
 json_post() {
@@ -56,7 +69,7 @@ PASSENGER_TOKEN="$(jq -r '.token // empty' "$WORK_DIR/register.json")"
 test -n "$PASSENGER_TOKEN"
 curl --fail --silent --show-error -H "Authorization: Bearer $PASSENGER_TOKEN" "$BASE_URL/api/auth/me" -o "$WORK_DIR/profile.json"
 jq -e --arg email "$EMAIL" '.email == $email' "$WORK_DIR/profile.json" >/dev/null
-PROFILE_PAYLOAD='{"fullName":"Smoke Passenger Updated","phone":"+8801700000001","emergencyContact":"+8801800000000","preferredLanguage":"বাংলা"}'
+PROFILE_PAYLOAD='{"fullName":"Smoke Passenger Updated","phone":"+8801700000001","emergencyContact":"+8801800000000","preferredLanguage":"BN"}'
 curl --fail --silent --show-error -X PUT -H 'Content-Type: application/json' -H "Authorization: Bearer $PASSENGER_TOKEN" -d "$PROFILE_PAYLOAD" "$BASE_URL/api/auth/me" -o "$WORK_DIR/profile-updated.json"
 jq -e '.name == "Smoke Passenger Updated"' "$WORK_DIR/profile-updated.json" >/dev/null
 
@@ -80,7 +93,7 @@ jq -e --arg reference "$REFERENCE" 'map(.reference) | index($reference) != null'
 log "verifying the QR ticket and cancellation flow"
 VERIFY_PAYLOAD="$(jq -nc --arg token "$TICKET_TOKEN" '{token:$token}')"
 json_post "$BASE_URL/api/tickets/verify" "$VERIFY_PAYLOAD" -o "$WORK_DIR/ticket-verify.json"
-jq -e '.valid == true' "$WORK_DIR/ticket-verify.json" >/dev/null
+jq -e '.valid == true and .travelAllowed == true' "$WORK_DIR/ticket-verify.json" >/dev/null
 curl --fail --silent --show-error -X POST -H 'Content-Type: application/json' -H "Authorization: Bearer $PASSENGER_TOKEN" -d '{"reason":"Automated deployment verification"}' "$BASE_URL/api/bookings/$REFERENCE/cancel" -o "$WORK_DIR/cancelled.json"
 jq -e '.status == "CANCELLED"' "$WORK_DIR/cancelled.json" >/dev/null
 
