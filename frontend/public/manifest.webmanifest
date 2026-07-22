@@ -1,0 +1,40 @@
+{
+  "name": "BusBD Intelligence",
+  "short_name": "BusBD",
+  "description": "Search, book, track and operate trusted buses across Bangladesh.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#f7f8f5",
+  "theme_color": "#087f5b",
+  "categories": ["travel", "navigation", "transportation"],
+  "icons": [
+    {
+      "src": "/favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Search buses",
+      "short_name": "Search",
+      "url": "/#search",
+      "icons": [{ "src": "/favicon.svg", "sizes": "any", "type": "image/svg+xml" }]
+    },
+    {
+      "name": "Live tracking",
+      "short_name": "Tracking",
+      "url": "/#tracking",
+      "icons": [{ "src": "/favicon.svg", "sizes": "any", "type": "image/svg+xml" }]
+    },
+    {
+      "name": "My trips",
+      "short_name": "Trips",
+      "url": "/#trips",
+      "icons": [{ "src": "/favicon.svg", "sizes": "any", "type": "image/svg+xml" }]
+    }
+  ]
+}

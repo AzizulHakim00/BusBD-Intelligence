@@ -1,9 +1,15 @@
 {
   "application": "BusBD Intelligence",
   "frontend": "functional-har-design",
-  "version": "2026.07.22.2-lively",
+  "version": "2026.07.22.3-platform",
   "expectedHeading": "Every journey, intelligently connected.",
   "journeyAssistant": true,
+  "smartTripCompare": true,
+  "passengerAccount": true,
+  "ticketVerification": true,
+  "driverWorkspace": true,
+  "installablePwa": true,
+  "offlineShell": true,
   "fullWorkflowSmoke": true,
   "rootApplication": true
 }

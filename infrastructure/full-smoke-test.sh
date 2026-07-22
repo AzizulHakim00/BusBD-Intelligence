@@ -10,11 +10,16 @@ exec > >(tee -a "$PROGRESS_LOG") 2>&1
 cleanup() { rm -rf "$WORK_DIR"; }
 on_error() {
   local status=$?
-  mkdir -p /tmp/busbd-smoke-responses
-  cp -R "$WORK_DIR"/. /tmp/busbd-smoke-responses/ 2>/dev/null || true
   echo "[BusBD smoke] FAILED at line ${BASH_LINENO[0]} with status ${status}"
   echo "[BusBD smoke] temporary response files:"
   find "$WORK_DIR" -maxdepth 1 -type f -printf '%f\n' 2>/dev/null || true
+  for diagnostic in booking.json hold.json ticket-verify.json cancelled.json complaint.json admin-login.json; do
+    if [ -s "$WORK_DIR/$diagnostic" ]; then
+      echo "--- $diagnostic ---"
+      cat "$WORK_DIR/$diagnostic"
+      echo
+    fi
+  done
   exit "$status"
 }
 trap cleanup EXIT
@@ -25,7 +30,7 @@ json_post() {
   local url="$1"
   local payload="$2"
   shift 2
-  curl --fail --silent --show-error -H 'Content-Type: application/json' "$@" -d "$payload" "$url"
+  curl --fail-with-body --silent --show-error -H 'Content-Type: application/json' "$@" -d "$payload" "$url"
 }
 
 log "waiting for the complete application"
@@ -40,20 +45,30 @@ for attempt in $(seq 1 90); do
   sleep 2
 done
 
-log "verifying the HAR frontend and JavaScript bundle"
+log "verifying the HAR frontend, PWA and JavaScript bundle"
 curl --fail --silent --show-error "$BASE_URL/" -o "$WORK_DIR/index.html"
 grep -q 'functional-har-design' "$WORK_DIR/index.html"
+grep -q 'manifest.webmanifest' "$WORK_DIR/index.html"
 JS_PATH="$(grep -oE 'src="/assets/[^"]+\.js"' "$WORK_DIR/index.html" | head -n1 | cut -d'"' -f2)"
 test -n "$JS_PATH"
 curl --fail --silent --show-error "$BASE_URL$JS_PATH" -o "$WORK_DIR/app.js"
 test -s "$WORK_DIR/app.js"
+grep -q 'Feature hub' "$WORK_DIR/app.js"
+curl --fail --silent --show-error "$BASE_URL/manifest.webmanifest" -o "$WORK_DIR/manifest.json"
+jq -e '.name == "BusBD Intelligence" and .display == "standalone"' "$WORK_DIR/manifest.json" >/dev/null
+curl --fail --silent --show-error "$BASE_URL/sw.js" -o "$WORK_DIR/sw.js"
+grep -q 'busbd-shell' "$WORK_DIR/sw.js"
 
 log "checking public summary, trips, seats and GPS"
 curl --fail --silent --show-error "$BASE_URL/api/public/summary" -o "$WORK_DIR/summary.json"
 jq -e 'type == "object" and (.buses | tonumber) >= 1' "$WORK_DIR/summary.json" >/dev/null
 curl --fail --silent --show-error "$BASE_URL/api/public/trips?origin=Dhaka&destination=Chattogram" -o "$WORK_DIR/trips.json"
 TRIP_ID="$(jq -r '.[0].id // empty' "$WORK_DIR/trips.json")"
+BOARDING_POINT="$(jq -r '.[0].boardingPoint // .[0].origin // empty' "$WORK_DIR/trips.json")"
+DROPPING_POINT="$(jq -r '.[0].droppingPoint // .[0].destination // empty' "$WORK_DIR/trips.json")"
 test -n "$TRIP_ID"
+test -n "$BOARDING_POINT"
+test -n "$DROPPING_POINT"
 curl --fail --silent --show-error "$BASE_URL/api/trips/$TRIP_ID/seats" -o "$WORK_DIR/seats.json"
 SEAT="$(jq -r '.seats[] | select(.status == "AVAILABLE") | .number' "$WORK_DIR/seats.json" | head -n1)"
 test -n "$SEAT"
@@ -70,28 +85,24 @@ json_post "$BASE_URL/api/auth/register" "$REGISTER_PAYLOAD" -o "$WORK_DIR/regist
 PASSENGER_TOKEN="$(jq -r '.token // empty' "$WORK_DIR/register.json")"
 test -n "$PASSENGER_TOKEN"
 curl --fail --silent --show-error -H "Authorization: Bearer $PASSENGER_TOKEN" "$BASE_URL/api/auth/me" -o "$WORK_DIR/profile.json"
-jq -e --arg email "$EMAIL" '.email == $email' "$WORK_DIR/profile.json" >/dev/null
+jq -e --arg email "$EMAIL" '.email == $email and .role == "PASSENGER"' "$WORK_DIR/profile.json" >/dev/null
 PROFILE_PAYLOAD='{"fullName":"Smoke Passenger Updated","phone":"+8801700000001","emergencyContact":"+8801800000000","preferredLanguage":"BN"}'
-curl --fail --silent --show-error -X PUT -H 'Content-Type: application/json' -H "Authorization: Bearer $PASSENGER_TOKEN" -d "$PROFILE_PAYLOAD" "$BASE_URL/api/auth/me" -o "$WORK_DIR/profile-updated.json"
-jq -e '.name == "Smoke Passenger Updated"' "$WORK_DIR/profile-updated.json" >/dev/null
+curl --fail-with-body --silent --show-error -X PUT -H 'Content-Type: application/json' -H "Authorization: Bearer $PASSENGER_TOKEN" -d "$PROFILE_PAYLOAD" "$BASE_URL/api/auth/me" -o "$WORK_DIR/profile-updated.json"
+jq -e '.name == "Smoke Passenger Updated" and .preferredLanguage == "BN"' "$WORK_DIR/profile-updated.json" >/dev/null
 
 log "holding a seat and completing a mock payment booking"
 HOLD_PAYLOAD="$(jq -nc --arg trip "$TRIP_ID" --arg seat "$SEAT" --arg email "$EMAIL" '{tripId:$trip,seats:[$seat],ownerEmail:$email}')"
 json_post "$BASE_URL/api/seat-holds" "$HOLD_PAYLOAD" -o "$WORK_DIR/hold.json"
 HOLD_ID="$(jq -r '.id // empty' "$WORK_DIR/hold.json")"
 test -n "$HOLD_ID"
-BOOK_PAYLOAD="$(jq -nc --arg hold "$HOLD_ID" --arg email "$EMAIL" '{holdId:$hold,passengerName:"Smoke Passenger Updated",passengerEmail:$email,passengerPhone:"+8801700000001",paymentProvider:"MOCK"}')"
+BOOK_PAYLOAD="$(jq -nc --arg hold "$HOLD_ID" --arg email "$EMAIL" --arg seat "$SEAT" --arg boarding "$BOARDING_POINT" --arg dropping "$DROPPING_POINT" '{holdId:$hold,passengerName:"Smoke Passenger Updated",passengerEmail:$email,passengerPhone:"+8801700000001",paymentProvider:"MOCK",boardingPoint:$boarding,droppingPoint:$dropping,promoCode:"BUSBD10",passengers:[{fullName:"Smoke Passenger Updated",passengerType:"ADULT",gender:"FEMALE",seatNumber:$seat,phone:"+8801700000001"}]}')"
 IDEMPOTENCY="smoke-booking-$STAMP"
-BOOK_CODE="$(curl --silent --show-error --output "$WORK_DIR/booking.json" --write-out '%{http_code}' -H 'Content-Type: application/json' -H "Idempotency-Key: $IDEMPOTENCY" -d "$BOOK_PAYLOAD" "$BASE_URL/api/bookings")"
-echo "[BusBD smoke] booking response HTTP $BOOK_CODE"
-if [[ ! "$BOOK_CODE" =~ ^2 ]]; then
-  cat "$WORK_DIR/booking.json" || true
-  false
-fi
+json_post "$BASE_URL/api/bookings" "$BOOK_PAYLOAD" -H "Idempotency-Key: $IDEMPOTENCY" -o "$WORK_DIR/booking.json"
 REFERENCE="$(jq -r '.reference // empty' "$WORK_DIR/booking.json")"
 TICKET_TOKEN="$(jq -r '.ticketToken // empty' "$WORK_DIR/booking.json")"
 test -n "$REFERENCE"
 test -n "$TICKET_TOKEN"
+jq -e '.status == "CONFIRMED" and .paymentStatus == "PAID" and (.discountAmount | tonumber) > 0' "$WORK_DIR/booking.json" >/dev/null
 curl --fail --silent --show-error "$BASE_URL/api/bookings/$REFERENCE" -o "$WORK_DIR/booking-read.json"
 jq -e --arg reference "$REFERENCE" '.reference == $reference and .status == "CONFIRMED"' "$WORK_DIR/booking-read.json" >/dev/null
 curl --fail --silent --show-error -H "Authorization: Bearer $PASSENGER_TOKEN" "$BASE_URL/api/bookings" -o "$WORK_DIR/my-bookings.json"
@@ -101,8 +112,8 @@ log "verifying the QR ticket and cancellation flow"
 VERIFY_PAYLOAD="$(jq -nc --arg token "$TICKET_TOKEN" '{token:$token}')"
 json_post "$BASE_URL/api/tickets/verify" "$VERIFY_PAYLOAD" -o "$WORK_DIR/ticket-verify.json"
 jq -e '.valid == true and .travelAllowed == true' "$WORK_DIR/ticket-verify.json" >/dev/null
-curl --fail --silent --show-error -X POST -H 'Content-Type: application/json' -H "Authorization: Bearer $PASSENGER_TOKEN" -d '{"reason":"Automated deployment verification"}' "$BASE_URL/api/bookings/$REFERENCE/cancel" -o "$WORK_DIR/cancelled.json"
-jq -e '.status == "CANCELLED"' "$WORK_DIR/cancelled.json" >/dev/null
+curl --fail-with-body --silent --show-error -X POST -H 'Content-Type: application/json' -H "Authorization: Bearer $PASSENGER_TOKEN" -d '{"reason":"Automated deployment verification"}' "$BASE_URL/api/bookings/$REFERENCE/cancel" -o "$WORK_DIR/cancelled.json"
+jq -e '.status == "CANCELLED" and .refundStatus == "COMPLETED"' "$WORK_DIR/cancelled.json" >/dev/null
 
 log "submitting and classifying passenger support"
 COMPLAINT_PAYLOAD="$(jq -nc --arg email "$EMAIL" '{email:$email,category:"Refund",message:"Please check the refund for my smoke test booking"}')"
@@ -116,6 +127,8 @@ ADMIN_TOKEN="$(jq -r '.token // empty' "$WORK_DIR/admin-login.json")"
 test -n "$ADMIN_TOKEN"
 curl --fail --silent --show-error -H "Authorization: Bearer $ADMIN_TOKEN" "$BASE_URL/api/operations/overview" -o "$WORK_DIR/operations.json"
 jq -e 'type == "object" and has("trips") and has("buses")' "$WORK_DIR/operations.json" >/dev/null
+curl --fail --silent --show-error -H "Authorization: Bearer $ADMIN_TOKEN" "$BASE_URL/api/operations/buses" -o "$WORK_DIR/operations-buses.json"
+jq -e 'type == "array" and length >= 1' "$WORK_DIR/operations-buses.json" >/dev/null
 
 log "all frontend and backend workflows passed"
 printf 'Trip: %s\nSeat: %s\nBooking: %s\n' "$TRIP_ID" "$SEAT" "$REFERENCE"
