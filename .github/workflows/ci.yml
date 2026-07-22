@@ -36,9 +36,72 @@ jobs:
     needs: [frontend, backend]
     steps:
       - uses: actions/checkout@v4
-      - uses: docker/setup-buildx-action@v3
-      - uses: docker/build-push-action@v6
+
+      - name: Build final image quietly
+        run: docker build --quiet -t busbd-intelligence:ci .
+
+      - name: Start final image with Render-style limits
+        run: |
+          docker run -d --name busbd-ci \
+            -p 8080:8080 \
+            -e PORT=8080 \
+            -e DB_POOL_MAX=3 \
+            -e DB_POOL_MIN=0 \
+            -e REDIS_HEALTH_ENABLED=false \
+            -e JAVA_OPTS='-Xms64m -Xmx256m -XX:+UseSerialGC -XX:ActiveProcessorCount=1' \
+            busbd-intelligence:ci
+
+      - name: Wait for public Render health path and backend health
+        run: |
+          : > /tmp/endpoint-status.log
+          for attempt in $(seq 1 75); do
+            ROOT_CODE=$(curl --silent --output /dev/null --write-out '%{http_code}' http://127.0.0.1:8080/ || true)
+            HEALTH_CODE=$(curl --silent --output /dev/null --write-out '%{http_code}' http://127.0.0.1:8080/actuator/health || true)
+            LIVE_CODE=$(curl --silent --output /dev/null --write-out '%{http_code}' http://127.0.0.1:8080/actuator/health/liveness || true)
+            echo "attempt=${attempt} root=${ROOT_CODE} health=${HEALTH_CODE} liveness=${LIVE_CODE}" | tee -a /tmp/endpoint-status.log
+            if [ "$ROOT_CODE" = "200" ] && [ "$HEALTH_CODE" = "200" ]; then
+              exit 0
+            fi
+            if ! docker inspect --format='{{.State.Running}}' busbd-ci 2>/dev/null | grep -q true; then
+              echo 'Container exited before becoming healthy.' | tee -a /tmp/endpoint-status.log
+              exit 1
+            fi
+            sleep 2
+          done
+          echo 'Application did not become healthy in time.' | tee -a /tmp/endpoint-status.log
+          exit 1
+
+      - name: Verify functional HAR frontend delivery
+        run: |
+          curl --fail --silent --show-error http://127.0.0.1:8080/ -o /tmp/index.html
+          grep -q 'functional-har-design' /tmp/index.html
+          JS_PATH=$(grep -oE 'src="/assets/[^"]+\.js"' /tmp/index.html | head -n1 | cut -d'"' -f2)
+          test -n "$JS_PATH"
+          curl --fail --silent --show-error "http://127.0.0.1:8080${JS_PATH}" -o /tmp/app.js
+          test -s /tmp/app.js
+
+      - name: Capture complete startup diagnostics
+        if: always()
+        run: |
+          docker logs busbd-ci > /tmp/container.log 2>&1 || true
+          docker inspect busbd-ci > /tmp/container-inspect.json 2>&1 || true
+
+      - name: Upload startup diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
         with:
-          context: .
-          push: false
-          tags: busbd-intelligence:ci
+          name: render-startup-diagnostics
+          path: |
+            /tmp/container.log
+            /tmp/container-inspect.json
+            /tmp/endpoint-status.log
+          if-no-files-found: warn
+          retention-days: 3
+
+      - name: Print application logs on failure
+        if: failure()
+        run: docker logs --tail 160 busbd-ci || true
+
+      - name: Stop test container
+        if: always()
+        run: docker rm -f busbd-ci || true
