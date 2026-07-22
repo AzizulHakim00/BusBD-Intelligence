@@ -20,8 +20,12 @@ COPY --from=frontend-build /frontend/dist/ ./src/main/resources/static/
 RUN test -f ./src/main/resources/static/index.html \
     && test -f ./src/main/resources/static/favicon.svg \
     && test -f ./src/main/resources/static/deployment.json \
+    && test -f ./src/main/resources/static/manifest.webmanifest \
+    && test -f ./src/main/resources/static/sw.js \
     && grep -R -q "trusted buses across Bangladesh" ./src/main/resources/static \
     && grep -q '"frontend": "functional-har-design"' ./src/main/resources/static/deployment.json \
+    && grep -q '"rootApplication": true' ./src/main/resources/static/deployment.json \
+    && grep -q 'busbd-shell-' ./src/main/resources/static/sw.js \
     && ! grep -R -q "secure seat locking" ./src/main/resources/static \
     && ! grep -q 'src="/app/' ./src/main/resources/static/index.html
 
@@ -34,8 +38,12 @@ RUN rm -rf /tmp/jar-check \
     && jar xf /workspace/target/busbd-intelligence-1.0.0.jar \
     && test -f BOOT-INF/classes/static/index.html \
     && test -f BOOT-INF/classes/static/deployment.json \
+    && test -f BOOT-INF/classes/static/manifest.webmanifest \
+    && test -f BOOT-INF/classes/static/sw.js \
     && grep -R -q "trusted buses across Bangladesh" BOOT-INF/classes/static \
     && grep -q '"frontend": "functional-har-design"' BOOT-INF/classes/static/deployment.json \
+    && grep -q '"rootApplication": true' BOOT-INF/classes/static/deployment.json \
+    && grep -q 'busbd-shell-' BOOT-INF/classes/static/sw.js \
     && ! grep -R -q "secure seat locking" BOOT-INF/classes/static \
     && ! grep -q 'src="/app/' BOOT-INF/classes/static/index.html
 
@@ -52,7 +60,7 @@ EXPOSE 8080
 # Stay safely below the Render Free memory ceiling and reduce startup pressure.
 ENV JAVA_OPTS="-Xms64m -Xmx256m -XX:+UseSerialGC -XX:ActiveProcessorCount=1 -Djava.security.egd=file:/dev/./urandom"
 
-# The entrypoint keeps Neon as the primary database. When explicitly enabled,
-# it falls back to the seeded H2 demo database instead of allowing a stale
-# external database secret to cancel the entire Render deployment.
+# The entrypoint keeps PostgreSQL as the primary database. When explicitly
+# enabled, it falls back to the seeded H2 demo database instead of allowing a
+# temporary database problem to cancel the entire Render deployment.
 ENTRYPOINT ["/app/render-entrypoint.sh"]

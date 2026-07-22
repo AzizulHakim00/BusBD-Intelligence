@@ -1,0 +1,88 @@
+name: Render Deployment Readiness
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - render.yaml
+      - Dockerfile
+      - infrastructure/render-entrypoint.sh
+      - frontend/**
+      - backend/**
+      - .github/workflows/render-readiness.yml
+  pull_request:
+    branches: [main]
+    paths:
+      - render.yaml
+      - Dockerfile
+      - infrastructure/render-entrypoint.sh
+      - frontend/**
+      - backend/**
+      - .github/workflows/render-readiness.yml
+  workflow_dispatch:
+
+jobs:
+  validate-render-release:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Validate the self-contained Render Blueprint
+        run: |
+          python -m pip install --quiet pyyaml
+          python - <<'PY'
+          from pathlib import Path
+          import yaml
+
+          blueprint = yaml.safe_load(Path('render.yaml').read_text())
+          services = blueprint.get('services') or []
+          databases = blueprint.get('databases') or []
+
+          web = next((item for item in services if item.get('type') == 'web'), None)
+          cache = next((item for item in services if item.get('type') == 'keyvalue'), None)
+          database = next((item for item in databases if item.get('name') == 'busbd-postgres'), None)
+
+          assert web, 'Render web service is missing'
+          assert cache, 'Render Key Value service is missing'
+          assert database, 'Render PostgreSQL database is missing'
+          assert web.get('runtime') == 'docker'
+          assert web.get('branch') == 'main'
+          assert web.get('region') == 'singapore'
+          assert web.get('healthCheckPath') == '/actuator/health/readiness'
+          assert web.get('autoDeployTrigger') == 'commit'
+          assert web.get('renderSubdomainPolicy') == 'enabled'
+          assert database.get('plan') == 'free'
+          assert database.get('region') == web.get('region')
+          assert cache.get('plan') == 'free'
+          assert cache.get('region') == web.get('region')
+
+          env = {item.get('key'): item for item in web.get('envVars', []) if item.get('key')}
+          assert not any(item.get('sync') is False for item in web.get('envVars', [])), 'Blueprint must not require manual secret entry'
+          assert env['DATABASE_URL']['fromDatabase'] == {'name': 'busbd-postgres', 'property': 'connectionString'}
+          assert env['DATABASE_USERNAME']['fromDatabase'] == {'name': 'busbd-postgres', 'property': 'user'}
+          assert env['DATABASE_PASSWORD']['fromDatabase'] == {'name': 'busbd-postgres', 'property': 'password'}
+          assert env['REDIS_URL']['fromService'] == {'type': 'keyvalue', 'name': 'busbd-redis', 'property': 'connectionString'}
+          assert env['JWT_SECRET'].get('generateValue') is True
+          assert env['TICKET_SECRET'].get('generateValue') is True
+          print('Render Blueprint structure is deployment-ready.')
+          PY
+
+      - name: Validate entrypoint and Render database URL conversion
+        run: |
+          sh -n infrastructure/render-entrypoint.sh
+          normalized="$(DATABASE_URL='postgresql://busbd:secret@db.internal:5432/busbd' BUSBD_VALIDATE_DATABASE_URL_ONLY=true sh infrastructure/render-entrypoint.sh | tail -n1)"
+          test "$normalized" = 'jdbc:postgresql://db.internal:5432/busbd'
+          case "$normalized" in
+            *secret*) echo 'Database credentials leaked during normalization.' >&2; exit 1 ;;
+          esac
+
+      - name: Verify deploy-critical image checks exist
+        run: |
+          grep -q 'manifest.webmanifest' Dockerfile
+          grep -q 'static/sw.js' Dockerfile
+          grep -q 'rootApplication' Dockerfile

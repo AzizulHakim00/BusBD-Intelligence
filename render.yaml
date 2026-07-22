@@ -1,38 +1,49 @@
 services:
   - type: keyvalue
     name: busbd-redis
+    region: singapore
     plan: free
     ipAllowList: []
     maxmemoryPolicy: noeviction
     persistenceMode: off
 
   - type: web
-    # This clean service and URL are the canonical BusBD deployment.
-    # The older busbd-intelligence-7o16 hostname is redirected in index.html.
     name: busbd-intelligence
+    repo: https://github.com/AzizulHakim00/BusBD-Intelligence
+    branch: main
     runtime: docker
+    region: singapore
     plan: free
     dockerfilePath: ./Dockerfile
-    healthCheckPath: /
+    healthCheckPath: /actuator/health/readiness
     autoDeployTrigger: commit
+    renderSubdomainPolicy: enabled
     envVars:
       - key: SPRING_PROFILES_ACTIVE
         value: postgres
       - key: DATABASE_URL
-        sync: false
+        fromDatabase:
+          name: busbd-postgres
+          property: connectionString
       - key: DATABASE_USERNAME
-        sync: false
+        fromDatabase:
+          name: busbd-postgres
+          property: user
       - key: DATABASE_PASSWORD
-        sync: false
+        fromDatabase:
+          name: busbd-postgres
+          property: password
+      - key: DATABASE_DRIVER
+        value: org.postgresql.Driver
       - key: REDIS_URL
         fromService:
           type: keyvalue
           name: busbd-redis
           property: connectionString
       - key: JWT_SECRET
-        sync: false
+        generateValue: true
       - key: TICKET_SECRET
-        sync: false
+        generateValue: true
       - key: DEMO_MODE
         value: "true"
       - key: DATABASE_FALLBACK_ENABLED
@@ -53,3 +64,12 @@ services:
         value: "false"
       - key: JAVA_OPTS
         value: "-Xms64m -Xmx256m -XX:+UseSerialGC -XX:ActiveProcessorCount=1 -Djava.security.egd=file:/dev/./urandom"
+
+databases:
+  - name: busbd-postgres
+    databaseName: busbd
+    user: busbd
+    region: singapore
+    plan: free
+    postgresMajorVersion: "17"
+    ipAllowList: []
