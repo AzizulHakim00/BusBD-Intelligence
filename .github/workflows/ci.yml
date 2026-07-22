@@ -36,13 +36,9 @@ jobs:
     needs: [frontend, backend]
     steps:
       - uses: actions/checkout@v4
-      - uses: docker/setup-buildx-action@v3
-      - uses: docker/build-push-action@v6
-        with:
-          context: .
-          push: false
-          load: true
-          tags: busbd-intelligence:ci
+
+      - name: Build final image quietly
+        run: docker build --quiet -t busbd-intelligence:ci .
 
       - name: Start final image with Render-style limits
         run: |
@@ -55,16 +51,25 @@ jobs:
             -e JAVA_OPTS='-Xms64m -Xmx256m -XX:+UseSerialGC -XX:ActiveProcessorCount=1' \
             busbd-intelligence:ci
 
-      - name: Wait for lightweight liveness probe
+      - name: Wait for application and report endpoint status
         run: |
           for attempt in $(seq 1 75); do
-            if curl --fail --silent http://127.0.0.1:8080/actuator/health/liveness | grep -q '"status":"UP"'; then
+            ROOT_CODE=$(curl --silent --output /dev/null --write-out '%{http_code}' http://127.0.0.1:8080/ || true)
+            HEALTH_CODE=$(curl --silent --output /dev/null --write-out '%{http_code}' http://127.0.0.1:8080/actuator/health || true)
+            LIVE_CODE=$(curl --silent --output /dev/null --write-out '%{http_code}' http://127.0.0.1:8080/actuator/health/liveness || true)
+            echo "attempt=${attempt} root=${ROOT_CODE} health=${HEALTH_CODE} liveness=${LIVE_CODE}"
+            if [ "$ROOT_CODE" = "200" ] && [ "$LIVE_CODE" = "200" ]; then
               exit 0
+            fi
+            if ! docker inspect --format='{{.State.Running}}' busbd-ci 2>/dev/null | grep -q true; then
+              echo 'Container exited before becoming live.'
+              docker logs --tail 120 busbd-ci
+              exit 1
             fi
             sleep 2
           done
           echo 'Application did not become live in time.'
-          docker logs busbd-ci
+          docker logs --tail 120 busbd-ci
           exit 1
 
       - name: Verify functional HAR frontend delivery
@@ -78,7 +83,7 @@ jobs:
 
       - name: Print application logs on failure
         if: failure()
-        run: docker logs busbd-ci || true
+        run: docker logs --tail 160 busbd-ci || true
 
       - name: Stop test container
         if: always()
