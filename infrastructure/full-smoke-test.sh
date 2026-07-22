@@ -10,6 +10,8 @@ exec > >(tee -a "$PROGRESS_LOG") 2>&1
 cleanup() { rm -rf "$WORK_DIR"; }
 on_error() {
   local status=$?
+  mkdir -p /tmp/busbd-smoke-responses
+  cp -R "$WORK_DIR"/. /tmp/busbd-smoke-responses/ 2>/dev/null || true
   echo "[BusBD smoke] FAILED at line ${BASH_LINENO[0]} with status ${status}"
   echo "[BusBD smoke] temporary response files:"
   find "$WORK_DIR" -maxdepth 1 -type f -printf '%f\n' 2>/dev/null || true
@@ -80,7 +82,12 @@ HOLD_ID="$(jq -r '.id // empty' "$WORK_DIR/hold.json")"
 test -n "$HOLD_ID"
 BOOK_PAYLOAD="$(jq -nc --arg hold "$HOLD_ID" --arg email "$EMAIL" '{holdId:$hold,passengerName:"Smoke Passenger Updated",passengerEmail:$email,passengerPhone:"+8801700000001",paymentProvider:"MOCK"}')"
 IDEMPOTENCY="smoke-booking-$STAMP"
-json_post "$BASE_URL/api/bookings" "$BOOK_PAYLOAD" -H "Idempotency-Key: $IDEMPOTENCY" -o "$WORK_DIR/booking.json"
+BOOK_CODE="$(curl --silent --show-error --output "$WORK_DIR/booking.json" --write-out '%{http_code}' -H 'Content-Type: application/json' -H "Idempotency-Key: $IDEMPOTENCY" -d "$BOOK_PAYLOAD" "$BASE_URL/api/bookings")"
+echo "[BusBD smoke] booking response HTTP $BOOK_CODE"
+if [[ ! "$BOOK_CODE" =~ ^2 ]]; then
+  cat "$WORK_DIR/booking.json" || true
+  false
+fi
 REFERENCE="$(jq -r '.reference // empty' "$WORK_DIR/booking.json")"
 TICKET_TOKEN="$(jq -r '.ticketToken // empty' "$WORK_DIR/booking.json")"
 test -n "$REFERENCE"
