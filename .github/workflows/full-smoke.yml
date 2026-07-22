@@ -45,6 +45,7 @@ jobs:
           path: |
             /tmp/busbd-full-smoke.log
             /tmp/busbd-smoke-progress.log
+            /tmp/busbd-smoke-responses
           if-no-files-found: warn
           retention-days: 3
 
@@ -52,6 +53,7 @@ jobs:
         if: failure()
         run: |
           cat /tmp/busbd-smoke-progress.log 2>/dev/null || true
+          find /tmp/busbd-smoke-responses -maxdepth 1 -type f -print -exec sh -c 'echo "--- $1"; cat "$1"' _ {} \; 2>/dev/null || true
           docker logs --tail 240 busbd-full-smoke || true
 
       - name: Stop container
