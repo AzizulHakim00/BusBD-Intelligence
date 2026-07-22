@@ -1,0 +1,36 @@
+name: BusBD Frontend Diagnostics
+
+on:
+  pull_request:
+    branches: [main]
+
+jobs:
+  frontend-diagnostics:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install frontend dependencies
+        working-directory: frontend
+        run: npm install --no-audit --no-fund
+      - name: Capture compiler output
+        working-directory: frontend
+        run: |
+          set +e
+          npm run build > /tmp/frontend-build.log 2>&1
+          STATUS=$?
+          cat /tmp/frontend-build.log
+          echo "$STATUS" > /tmp/frontend-build.status
+          exit 0
+      - name: Upload compiler output
+        uses: actions/upload-artifact@v4
+        with:
+          name: busbd-frontend-compiler
+          path: |
+            /tmp/frontend-build.log
+            /tmp/frontend-build.status
+          retention-days: 2
+      - name: Enforce successful build
+        run: test "$(cat /tmp/frontend-build.status)" = "0"
