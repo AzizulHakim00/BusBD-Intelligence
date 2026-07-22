@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import './experience.css'
+import './journey-guard.css'
 
 type PlannerRoute = {
   id: string
@@ -8,6 +9,18 @@ type PlannerRoute = {
   travelDate: string
   passengers: number
   savedAt: string
+}
+
+type JourneyWatch = PlannerRoute & {
+  targetFare: number
+  notificationsEnabled: boolean
+}
+
+type GeoPoint = {
+  latitude: number
+  longitude: number
+  accuracy: number
+  capturedAt: string
 }
 
 type SystemSnapshot = {
@@ -21,9 +34,17 @@ type SystemSnapshot = {
   checkedAt: string
 }
 
+type InstallPromptEvent = Event & {
+  prompt: () => Promise<void>
+  userChoice: Promise<{ outcome: 'accepted' | 'dismissed'; platform: string }>
+}
+
 const cities = ['Dhaka', 'Chattogram', 'Sylhet', 'Rajshahi', "Cox's Bazar"]
 const savedKey = 'busbd_saved_routes_v4'
 const recentKey = 'busbd_recent_plans_v4'
+const watchKey = 'busbd_journey_watches_v1'
+const contactKey = 'busbd_guard_contact_v1'
+const checkInKey = 'busbd_guard_checkin_v1'
 
 const routeData: Record<string, { fare: number; hours: number; distance: number }> = {
   'Dhaka|Chattogram': { fare: 1200, hours: 6.2, distance: 265 },
@@ -35,12 +56,12 @@ const routeData: Record<string, { fare: number; hours: number; distance: number 
   'Rajshahi|Sylhet': { fare: 1450, hours: 8.4, distance: 365 }
 }
 
-const safeRead = (key: string): PlannerRoute[] => {
+const safeRead = <T,>(key: string, fallback: T): T => {
   try {
-    const value = JSON.parse(localStorage.getItem(key) || '[]')
-    return Array.isArray(value) ? value.slice(0, 6) : []
+    const value = localStorage.getItem(key)
+    return value ? JSON.parse(value) as T : fallback
   } catch {
-    return []
+    return fallback
   }
 }
 
@@ -53,16 +74,25 @@ const nativeValue = (element: HTMLInputElement | HTMLSelectElement, value: strin
 }
 
 const formatCheckedAt = () => new Date().toLocaleTimeString('en-BD', { hour: '2-digit', minute: '2-digit' })
+const mapLink = (point: GeoPoint) => `https://www.google.com/maps?q=${point.latitude},${point.longitude}`
 
 export default function ExperienceLayer() {
   const [open, setOpen] = useState(false)
-  const [tab, setTab] = useState<'plan' | 'status'>('plan')
+  const [tab, setTab] = useState<'plan' | 'status' | 'guard'>('plan')
   const [origin, setOrigin] = useState('Dhaka')
   const [destination, setDestination] = useState('Chattogram')
   const [travelDate, setTravelDate] = useState(() => new Date(Date.now() + 86400000).toISOString().slice(0, 10))
   const [passengers, setPassengers] = useState(1)
-  const [saved, setSaved] = useState<PlannerRoute[]>(() => safeRead(savedKey))
-  const [recent, setRecent] = useState<PlannerRoute[]>(() => safeRead(recentKey))
+  const [saved, setSaved] = useState<PlannerRoute[]>(() => safeRead<PlannerRoute[]>(savedKey, []).slice(0, 6))
+  const [recent, setRecent] = useState<PlannerRoute[]>(() => safeRead<PlannerRoute[]>(recentKey, []).slice(0, 4))
+  const [watches, setWatches] = useState<JourneyWatch[]>(() => safeRead<JourneyWatch[]>(watchKey, []).slice(0, 8))
+  const [targetFare, setTargetFare] = useState(1000)
+  const [contactName, setContactName] = useState(() => safeRead<{ name: string; phone: string }>(contactKey, { name: '', phone: '' }).name)
+  const [contactPhone, setContactPhone] = useState(() => safeRead<{ name: string; phone: string }>(contactKey, { name: '', phone: '' }).phone)
+  const [lastCheckIn, setLastCheckIn] = useState(() => localStorage.getItem(checkInKey) || '')
+  const [location, setLocation] = useState<GeoPoint | null>(null)
+  const [locating, setLocating] = useState(false)
+  const [installPrompt, setInstallPrompt] = useState<InstallPromptEvent | null>(null)
   const [toast, setToast] = useState('')
   const [snapshot, setSnapshot] = useState<SystemSnapshot>({
     loading: true,
@@ -87,9 +117,13 @@ export default function ExperienceLayer() {
     }
   }, [origin, destination, passengers])
 
+  useEffect(() => {
+    setTargetFare(Math.max(100, Math.round(estimate.fare * 0.9 / 50) * 50))
+  }, [estimate.fare, origin, destination])
+
   const flash = (message: string) => {
     setToast(message)
-    window.setTimeout(() => setToast(current => current === message ? '' : current), 2600)
+    window.setTimeout(() => setToast(current => current === message ? '' : current), 3200)
   }
 
   const loadStatus = async () => {
@@ -152,8 +186,19 @@ export default function ExperienceLayer() {
       loadStatus()
     }
     const offline = () => setSnapshot(current => ({ ...current, online: false, health: 'DEGRADED' }))
+    const captureInstallPrompt = (event: Event) => {
+      event.preventDefault()
+      setInstallPrompt(event as InstallPromptEvent)
+    }
+    const installed = () => {
+      setInstallPrompt(null)
+      flash('BusBD is installed and ready for faster access.')
+    }
+
     window.addEventListener('online', online)
     window.addEventListener('offline', offline)
+    window.addEventListener('beforeinstallprompt', captureInstallPrompt)
+    window.addEventListener('appinstalled', installed)
     loadStatus()
     const timer = window.setInterval(loadStatus, 45000)
 
@@ -162,6 +207,8 @@ export default function ExperienceLayer() {
       window.removeEventListener('pointermove', pointer)
       window.removeEventListener('online', online)
       window.removeEventListener('offline', offline)
+      window.removeEventListener('beforeinstallprompt', captureInstallPrompt)
+      window.removeEventListener('appinstalled', installed)
       window.clearInterval(timer)
       document.body.classList.remove('experience-ready')
     }
@@ -205,6 +252,29 @@ export default function ExperienceLayer() {
     localStorage.setItem(savedKey, JSON.stringify(next))
   }
 
+  const createWatch = async () => {
+    if (origin === destination) return flash('Choose two different cities.')
+    const notificationsEnabled = 'Notification' in window && Notification.permission === 'granted'
+    const watch: JourneyWatch = { ...makeRoute(), targetFare: Math.max(1, targetFare), notificationsEnabled }
+    const next = [watch, ...watches.filter(item => !(item.origin === origin && item.destination === destination && item.travelDate === travelDate))].slice(0, 8)
+    setWatches(next)
+    localStorage.setItem(watchKey, JSON.stringify(next))
+
+    if ('Notification' in window && Notification.permission === 'default') {
+      const permission = await Notification.requestPermission()
+      if (permission === 'granted') {
+        new Notification('BusBD journey watch enabled', { body: `${origin} → ${destination} target ৳${watch.targetFare.toLocaleString('en-BD')}` })
+      }
+    }
+    flash(estimate.fare <= watch.targetFare ? 'Target already reached for this estimate.' : 'Journey watch saved on this device.')
+  }
+
+  const removeWatch = (id: string) => {
+    const next = watches.filter(item => item.id !== id)
+    setWatches(next)
+    localStorage.setItem(watchKey, JSON.stringify(next))
+  }
+
   const useRoute = (route?: PlannerRoute) => {
     const plan = route || makeRoute()
     if (plan.origin === plan.destination) return flash('Choose two different cities.')
@@ -243,7 +313,102 @@ export default function ExperienceLayer() {
     setDestination(origin)
   }
 
+  const saveContact = () => {
+    localStorage.setItem(contactKey, JSON.stringify({ name: contactName.trim(), phone: contactPhone.trim() }))
+    flash(contactPhone.trim() ? 'Emergency contact saved on this device.' : 'Emergency contact cleared.')
+  }
+
+  const captureLocation = () => {
+    if (!navigator.geolocation) return flash('Location is not supported on this device.')
+    setLocating(true)
+    navigator.geolocation.getCurrentPosition(
+      position => {
+        setLocation({
+          latitude: Number(position.coords.latitude.toFixed(6)),
+          longitude: Number(position.coords.longitude.toFixed(6)),
+          accuracy: Math.round(position.coords.accuracy),
+          capturedAt: new Date().toISOString()
+        })
+        setLocating(false)
+        flash('Current location attached to your journey guard.')
+      },
+      () => {
+        setLocating(false)
+        flash('Location permission was not available.')
+      },
+      { enableHighAccuracy: true, timeout: 10000, maximumAge: 30000 }
+    )
+  }
+
+  const journeyMessage = () => {
+    const lines = [
+      `BusBD journey: ${origin} → ${destination}`,
+      `Travel date: ${travelDate}`,
+      `Passengers: ${passengers}`,
+      `Estimated time: ${estimate.hours.toFixed(1)} hours`,
+      `Estimated fare: ৳${estimate.fare.toLocaleString('en-BD')}`
+    ]
+    if (location) lines.push(`Live location: ${mapLink(location)}`)
+    lines.push('Shared from BusBD Intelligence.')
+    return lines.join('\n')
+  }
+
+  const copyText = async (value: string) => {
+    try {
+      await navigator.clipboard.writeText(value)
+    } catch {
+      const area = document.createElement('textarea')
+      area.value = value
+      area.style.position = 'fixed'
+      area.style.opacity = '0'
+      document.body.appendChild(area)
+      area.select()
+      document.execCommand('copy')
+      area.remove()
+    }
+  }
+
+  const shareJourney = async () => {
+    const text = journeyMessage()
+    try {
+      if (navigator.share) {
+        await navigator.share({ title: 'My BusBD journey', text })
+        flash('Journey shared securely.')
+      } else {
+        await copyText(text)
+        flash('Journey details copied to clipboard.')
+      }
+    } catch (error) {
+      if ((error as DOMException).name !== 'AbortError') {
+        await copyText(text)
+        flash('Journey details copied to clipboard.')
+      }
+    }
+  }
+
+  const checkIn = () => {
+    const stamp = new Date().toISOString()
+    setLastCheckIn(stamp)
+    localStorage.setItem(checkInKey, stamp)
+    flash('Safety check-in saved on this device.')
+  }
+
+  const sendSos = () => {
+    const phone = contactPhone.trim()
+    if (!phone) return flash('Save an emergency contact first.')
+    const body = `SOS from BusBD. ${journeyMessage()}`
+    window.location.href = `sms:${encodeURIComponent(phone)}?body=${encodeURIComponent(body)}`
+  }
+
+  const installApp = async () => {
+    if (!installPrompt) return flash('Install is available from your browser menu on supported devices.')
+    await installPrompt.prompt()
+    const choice = await installPrompt.userChoice
+    if (choice.outcome === 'accepted') setInstallPrompt(null)
+  }
+
   const healthy = snapshot.online && snapshot.health === 'UP'
+  const matchingWatch = watches.find(item => item.origin === origin && item.destination === destination && item.travelDate === travelDate)
 
   return <>
     <div className="ambient-network" aria-hidden="true">
@@ -261,15 +426,16 @@ export default function ExperienceLayer() {
     </button>
 
     {open && <div className="assistant-backdrop" onMouseDown={event => event.target === event.currentTarget && setOpen(false)}>
-      <aside id="journey-assistant" className="journey-assistant" aria-label="BusBD journey assistant">
+      <aside id="journey-assistant" className="journey-assistant journey-assistant-v3" aria-label="BusBD journey assistant">
         <header className="assistant-header">
-          <div><span className="assistant-kicker"><i className="live-dot" /> BusBD intelligence</span><h2>Plan with live context.</h2></div>
+          <div><span className="assistant-kicker"><i className="live-dot" /> BusBD intelligence V3</span><h2>Plan, watch and travel safer.</h2></div>
           <button className="assistant-close" onClick={() => setOpen(false)} aria-label="Close assistant">×</button>
         </header>
 
         <div className="assistant-tabs" role="tablist">
           <button className={tab === 'plan' ? 'active' : ''} onClick={() => setTab('plan')} role="tab">Smart planner</button>
           <button className={tab === 'status' ? 'active' : ''} onClick={() => { setTab('status'); loadStatus() }} role="tab">Live system</button>
+          <button className={tab === 'guard' ? 'active' : ''} onClick={() => setTab('guard')} role="tab">Journey guard</button>
         </div>
 
         {tab === 'plan' ? <div className="assistant-body">
@@ -293,10 +459,27 @@ export default function ExperienceLayer() {
             <button className="assistant-secondary" onClick={saveRoute}>☆ Save route</button>
           </div>
 
+          <section className="watch-card">
+            <div className="assistant-list-head"><div><h3>Smart journey watch</h3><p>Save a target fare and keep this route ready.</p></div>{matchingWatch && <span>Active</span>}</div>
+            <div className="watch-controls">
+              <label><span>Notify near fare</span><div><b>৳</b><input type="number" min="1" step="50" value={targetFare} onChange={event => setTargetFare(Number(event.target.value))} /></div></label>
+              <button onClick={createWatch}>{matchingWatch ? 'Update watch' : 'Create watch'}</button>
+            </div>
+            {watches.length > 0 && <div className="watch-list">{watches.slice(0, 3).map(item => {
+              const current = routeData[`${item.origin}|${item.destination}`] || routeData[`${item.destination}|${item.origin}`]
+              const currentFare = (current?.fare || 1250) * item.passengers
+              return <div key={item.id} className={currentFare <= item.targetFare ? 'target-hit' : ''}>
+                <button onClick={() => useRoute(item)}><strong>{item.origin} → {item.destination}</strong><span>{item.travelDate} · Target ৳{item.targetFare.toLocaleString('en-BD')}</span></button>
+                <em>{currentFare <= item.targetFare ? 'Target reached' : `Now ৳${currentFare.toLocaleString('en-BD')}`}</em>
+                <button className="remove-route" onClick={() => removeWatch(item.id)} aria-label={`Remove watch for ${item.origin} to ${item.destination}`}>×</button>
+              </div>
+            })}</div>}
+          </section>
+
           {saved.length > 0 && <section className="assistant-list"><div className="assistant-list-head"><h3>Saved routes</h3><span>{saved.length}</span></div>{saved.map(route => <div className="saved-route" key={route.id}><button onClick={() => useRoute(route)}><strong>{route.origin} → {route.destination}</strong><span>{route.travelDate} · {route.passengers} passenger{route.passengers > 1 ? 's' : ''}</span></button><button className="remove-route" onClick={() => removeRoute(route.id)} aria-label={`Remove ${route.origin} to ${route.destination}`}>×</button></div>)}</section>}
 
           {recent.length > 0 && <section className="recent-plans"><h3>Recent plans</h3><div>{recent.map(route => <button key={route.id} onClick={() => useRoute(route)}>{route.origin} <span>→</span> {route.destination}</button>)}</div></section>}
-        </div> : <div className="assistant-body">
+        </div> : tab === 'status' ? <div className="assistant-body">
           <div className={`system-hero ${healthy ? 'healthy' : 'degraded'}`}><span className="system-radar"><i /></span><div><span>Current platform status</span><h3>{snapshot.loading ? 'Synchronizing…' : healthy ? 'All core services operational' : snapshot.online ? 'Running with limited telemetry' : 'You are currently offline'}</h3><p>{snapshot.checkedAt ? `Last checked at ${snapshot.checkedAt}` : 'Connecting to BusBD services'}</p></div></div>
           <div className="live-metric-grid">
             <article><span>Connected districts</span><strong>{snapshot.districts || '—'}</strong><i /></article>
@@ -310,7 +493,43 @@ export default function ExperienceLayer() {
             <button onClick={() => openNavigation('Support')}><b>◎</b><span>Passenger support</span></button>
             <button onClick={() => openNavigation('Operations')}><b>✦</b><span>Operations portal</span></button>
           </div>
+          <section className="install-card">
+            <div><span>Installable travel companion</span><h3>Faster launch and resilient offline shell</h3><p>BusBD can be installed on supported phones and desktops. Live data still requires a connection.</p></div>
+            <button onClick={installApp}>{installPrompt ? 'Install BusBD' : 'Installation help'}</button>
+          </section>
           <button className="status-refresh" onClick={loadStatus} disabled={snapshot.loading}>{snapshot.loading ? 'Refreshing live data…' : 'Refresh system snapshot'}</button>
+        </div> : <div className="assistant-body guard-body">
+          <section className="guard-hero">
+            <div><span>Journey guard</span><h3>Share context before you travel.</h3><p>Keep an emergency contact, location and route summary ready on this device.</p></div>
+            <span className="guard-shield">✓</span>
+          </section>
+
+          <section className="guard-section">
+            <div className="assistant-list-head"><div><h3>Emergency contact</h3><p>Stored only in this browser.</p></div></div>
+            <div className="guard-contact-grid">
+              <label><span>Name</span><input value={contactName} onChange={event => setContactName(event.target.value)} placeholder="Trusted person" /></label>
+              <label><span>Phone</span><input value={contactPhone} onChange={event => setContactPhone(event.target.value)} placeholder="+8801XXXXXXXXX" inputMode="tel" /></label>
+            </div>
+            <button className="guard-save" onClick={saveContact}>Save contact</button>
+          </section>
+
+          <section className="guard-section">
+            <div className="assistant-list-head"><div><h3>Live journey context</h3><p>{origin} → {destination} · {travelDate}</p></div></div>
+            <div className="guard-context">
+              <div><span>Location</span><strong>{location ? `${location.latitude}, ${location.longitude}` : 'Not attached'}</strong><small>{location ? `Accuracy ±${location.accuracy} m` : 'Use location only when needed'}</small></div>
+              <button onClick={captureLocation} disabled={locating}>{locating ? 'Locating…' : location ? 'Refresh location' : 'Attach location'}</button>
+            </div>
+            {location && <a className="map-link" href={mapLink(location)} target="_blank" rel="noreferrer">Open captured location in Maps ↗</a>}
+            <div className="guard-action-grid">
+              <button onClick={shareJourney}><b>↗</b><span>Share journey</span></button>
+              <button onClick={checkIn}><b>✓</b><span>Safety check-in</span></button>
+              <button onClick={sendSos}><b>!</b><span>Text emergency contact</span></button>
+              <a href="tel:999"><b>☎</b><span>Call 999</span></a>
+            </div>
+            <p className="guard-checkin">{lastCheckIn ? `Last check-in: ${new Date(lastCheckIn).toLocaleString('en-BD')}` : 'No safety check-in saved yet.'}</p>
+          </section>
+
+          <p className="guard-disclaimer">BusBD Journey Guard helps prepare and share journey information. It does not replace emergency services or guarantee message delivery.</p>
         </div>}
 
         {toast && <div className="assistant-toast" role="status">{toast}</div>}
