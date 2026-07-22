@@ -1,10 +1,9 @@
 import type { BookingView, DriverAssignment, Location, PassengerInput, Seat, Trip, User } from './types'
 
 const tokenKey = 'busbd_token'
-const passengerTokenKey = 'busbd_passenger_token'
 const bookingEmailKey = 'busbd_last_booking_email'
 
-export const token = () => localStorage.getItem(tokenKey) || localStorage.getItem(passengerTokenKey)
+export const token = () => localStorage.getItem(tokenKey)
 export const saveToken = (value: string | null) => value ? localStorage.setItem(tokenKey, value) : localStorage.removeItem(tokenKey)
 
 const rememberBookingEmail = (email: string) => {
@@ -19,6 +18,8 @@ const requestBookingEmail = () => {
   if (!entered?.trim()) throw new Error('The booking email is required to protect your ticket.')
   return rememberBookingEmail(entered)
 }
+
+const savedOrRequestedBookingEmail = () => localStorage.getItem(bookingEmailKey) || requestBookingEmail()
 
 async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
   const headers = new Headers(init.headers)
@@ -46,7 +47,10 @@ export const api = {
     return request<BookingView>(`/api/bookings/${encodeURIComponent(reference)}?email=${encodeURIComponent(email)}`)
   },
   myBookings: () => request<BookingView[]>('/api/bookings'),
-  cancelBooking: (reference: string, reason = 'Passenger cancellation') => request<BookingView>(`/api/bookings/${reference}/cancel`, { method: 'POST', body: JSON.stringify({ reason }) }),
+  cancelBooking: (reference: string, reason = 'Passenger cancellation') => {
+    const email = savedOrRequestedBookingEmail()
+    return request<BookingView>(`/api/bookings/${encodeURIComponent(reference)}/cancel?email=${encodeURIComponent(email)}`, { method: 'POST', body: JSON.stringify({ reason }) })
+  },
   verifyTicket: (ticketToken: string) => request<Record<string, unknown>>('/api/tickets/verify', { method: 'POST', body: JSON.stringify({ token: ticketToken }) }),
   locations: () => request<Location[]>('/api/tracking/locations'),
   tripTracking: (tripId: string) => request<Record<string, unknown>>(`/api/tracking/trips/${tripId}`),
