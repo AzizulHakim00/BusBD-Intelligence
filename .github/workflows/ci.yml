@@ -53,23 +53,22 @@ jobs:
 
       - name: Wait for application and report endpoint status
         run: |
+          : > /tmp/endpoint-status.log
           for attempt in $(seq 1 75); do
             ROOT_CODE=$(curl --silent --output /dev/null --write-out '%{http_code}' http://127.0.0.1:8080/ || true)
             HEALTH_CODE=$(curl --silent --output /dev/null --write-out '%{http_code}' http://127.0.0.1:8080/actuator/health || true)
             LIVE_CODE=$(curl --silent --output /dev/null --write-out '%{http_code}' http://127.0.0.1:8080/actuator/health/liveness || true)
-            echo "attempt=${attempt} root=${ROOT_CODE} health=${HEALTH_CODE} liveness=${LIVE_CODE}"
+            echo "attempt=${attempt} root=${ROOT_CODE} health=${HEALTH_CODE} liveness=${LIVE_CODE}" | tee -a /tmp/endpoint-status.log
             if [ "$ROOT_CODE" = "200" ] && [ "$LIVE_CODE" = "200" ]; then
               exit 0
             fi
             if ! docker inspect --format='{{.State.Running}}' busbd-ci 2>/dev/null | grep -q true; then
-              echo 'Container exited before becoming live.'
-              docker logs --tail 120 busbd-ci
+              echo 'Container exited before becoming live.' | tee -a /tmp/endpoint-status.log
               exit 1
             fi
             sleep 2
           done
-          echo 'Application did not become live in time.'
-          docker logs --tail 120 busbd-ci
+          echo 'Application did not become live in time.' | tee -a /tmp/endpoint-status.log
           exit 1
 
       - name: Verify functional HAR frontend delivery
@@ -80,6 +79,24 @@ jobs:
           test -n "$JS_PATH"
           curl --fail --silent --show-error "http://127.0.0.1:8080${JS_PATH}" -o /tmp/app.js
           test -s /tmp/app.js
+
+      - name: Capture complete startup diagnostics
+        if: always()
+        run: |
+          docker logs busbd-ci > /tmp/container.log 2>&1 || true
+          docker inspect busbd-ci > /tmp/container-inspect.json 2>&1 || true
+
+      - name: Upload startup diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: render-startup-diagnostics
+          path: |
+            /tmp/container.log
+            /tmp/container-inspect.json
+            /tmp/endpoint-status.log
+          if-no-files-found: warn
+          retention-days: 3
 
       - name: Print application logs on failure
         if: failure()
