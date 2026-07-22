@@ -45,6 +45,34 @@ public class BookingController {
     @GetMapping("/bookings/{reference}")
     public Map<String, Object> booking(@PathVariable String reference,
                                        @RequestParam @NotBlank @Email String email) {
+        return safeGuestView(reference, email);
+    }
+    @GetMapping("/bookings")
+    public List<Map<String, Object>> mine(Authentication authentication) { return bookingService.bookingsForUser(authentication.getName()); }
+    @PostMapping("/bookings/{reference}/cancel")
+    public Map<String, Object> cancel(@PathVariable String reference,
+                                      @RequestParam(required = false) @Email String email,
+                                      @RequestBody(required = false) CancelRequest request,
+                                      Authentication authentication) {
+        boolean authenticated = authentication != null && authentication.isAuthenticated()
+                && !"anonymousUser".equalsIgnoreCase(authentication.getName());
+        boolean privileged = authenticated && authentication.getAuthorities().stream()
+                .anyMatch(a -> Set.of("ROLE_SUPER_ADMIN", "ROLE_OPERATOR_STAFF", "ROLE_SUPPORT_AGENT").contains(a.getAuthority()));
+        String actor;
+        if (authenticated) {
+            actor = authentication.getName();
+        } else {
+            if (email == null || email.isBlank()) throw new NoSuchElementException("Booking not found");
+            // Validate the same booking-reference + email pair before allowing guest cancellation.
+            safeGuestView(reference, email);
+            actor = email.trim();
+        }
+        return bookingService.cancel(reference, actor, privileged, request == null ? null : request.reason());
+    }
+    @PostMapping("/tickets/verify")
+    public Map<String, Object> verify(@Valid @RequestBody VerifyRequest request) { return bookingService.verifyTicket(request.token()); }
+
+    private Map<String, Object> safeGuestView(String reference, String email) {
         Map<String, Object> fullView = bookingService.booking(reference);
         Object ownerEmail = fullView.get("passengerEmail");
         if (!(ownerEmail instanceof String owner) || !owner.equalsIgnoreCase(email.trim())) {
@@ -57,13 +85,4 @@ public class BookingController {
         }
         return safeView;
     }
-    @GetMapping("/bookings")
-    public List<Map<String, Object>> mine(Authentication authentication) { return bookingService.bookingsForUser(authentication.getName()); }
-    @PostMapping("/bookings/{reference}/cancel")
-    public Map<String, Object> cancel(@PathVariable String reference, @RequestBody(required = false) CancelRequest request, Authentication authentication) {
-        boolean privileged = authentication.getAuthorities().stream().anyMatch(a -> Set.of("ROLE_SUPER_ADMIN", "ROLE_OPERATOR_STAFF", "ROLE_SUPPORT_AGENT").contains(a.getAuthority()));
-        return bookingService.cancel(reference, authentication.getName(), privileged, request == null ? null : request.reason());
-    }
-    @PostMapping("/tickets/verify")
-    public Map<String, Object> verify(@Valid @RequestBody VerifyRequest request) { return bookingService.verifyTicket(request.token()); }
 }
