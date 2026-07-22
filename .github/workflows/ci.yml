@@ -41,4 +41,45 @@ jobs:
         with:
           context: .
           push: false
+          load: true
           tags: busbd-intelligence:ci
+
+      - name: Start final image with Render-style limits
+        run: |
+          docker run -d --name busbd-ci \
+            -p 8080:8080 \
+            -e PORT=8080 \
+            -e DB_POOL_MAX=3 \
+            -e DB_POOL_MIN=0 \
+            -e REDIS_HEALTH_ENABLED=false \
+            -e JAVA_OPTS='-Xms64m -Xmx256m -XX:+UseSerialGC -XX:ActiveProcessorCount=1' \
+            busbd-intelligence:ci
+
+      - name: Wait for lightweight liveness probe
+        run: |
+          for attempt in $(seq 1 75); do
+            if curl --fail --silent http://127.0.0.1:8080/actuator/health/liveness | grep -q '"status":"UP"'; then
+              exit 0
+            fi
+            sleep 2
+          done
+          echo 'Application did not become live in time.'
+          docker logs busbd-ci
+          exit 1
+
+      - name: Verify functional HAR frontend delivery
+        run: |
+          curl --fail --silent --show-error http://127.0.0.1:8080/ -o /tmp/index.html
+          grep -q 'functional-har-design' /tmp/index.html
+          JS_PATH=$(grep -oE 'src="/assets/[^"]+\.js"' /tmp/index.html | head -n1 | cut -d'"' -f2)
+          test -n "$JS_PATH"
+          curl --fail --silent --show-error "http://127.0.0.1:8080${JS_PATH}" -o /tmp/app.js
+          test -s /tmp/app.js
+
+      - name: Print application logs on failure
+        if: failure()
+        run: docker logs busbd-ci || true
+
+      - name: Stop test container
+        if: always()
+        run: docker rm -f busbd-ci || true
