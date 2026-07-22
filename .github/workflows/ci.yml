@@ -51,7 +51,7 @@ jobs:
             -e JAVA_OPTS='-Xms64m -Xmx256m -XX:+UseSerialGC -XX:ActiveProcessorCount=1' \
             busbd-intelligence:ci
 
-      - name: Wait for application and report endpoint status
+      - name: Wait for public Render health path and backend health
         run: |
           : > /tmp/endpoint-status.log
           for attempt in $(seq 1 75); do
@@ -59,16 +59,16 @@ jobs:
             HEALTH_CODE=$(curl --silent --output /dev/null --write-out '%{http_code}' http://127.0.0.1:8080/actuator/health || true)
             LIVE_CODE=$(curl --silent --output /dev/null --write-out '%{http_code}' http://127.0.0.1:8080/actuator/health/liveness || true)
             echo "attempt=${attempt} root=${ROOT_CODE} health=${HEALTH_CODE} liveness=${LIVE_CODE}" | tee -a /tmp/endpoint-status.log
-            if [ "$ROOT_CODE" = "200" ] && [ "$LIVE_CODE" = "200" ]; then
+            if [ "$ROOT_CODE" = "200" ] && [ "$HEALTH_CODE" = "200" ]; then
               exit 0
             fi
             if ! docker inspect --format='{{.State.Running}}' busbd-ci 2>/dev/null | grep -q true; then
-              echo 'Container exited before becoming live.' | tee -a /tmp/endpoint-status.log
+              echo 'Container exited before becoming healthy.' | tee -a /tmp/endpoint-status.log
               exit 1
             fi
             sleep 2
           done
-          echo 'Application did not become live in time.' | tee -a /tmp/endpoint-status.log
+          echo 'Application did not become healthy in time.' | tee -a /tmp/endpoint-status.log
           exit 1
 
       - name: Verify functional HAR frontend delivery
