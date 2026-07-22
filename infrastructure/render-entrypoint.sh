@@ -29,6 +29,26 @@ run_java_in_foreground() {
   exec java ${JAVA_OPTS:-} -jar app.jar
 }
 
+normalize_database_url() {
+  case "${DATABASE_URL:-}" in
+    postgresql://*|postgres://*)
+      # Render exposes PostgreSQL as postgresql://user:password@host:port/db.
+      # Spring's PostgreSQL driver needs jdbc:postgresql://host:port/db and
+      # receives the generated username/password through separate variables.
+      database_address="${DATABASE_URL#*://}"
+      case "${database_address}" in
+        *@*) database_address="${database_address#*@}" ;;
+      esac
+      export DATABASE_URL="jdbc:postgresql://${database_address}"
+      echo "BusBD startup: normalized the Render PostgreSQL connection URL for JDBC."
+      ;;
+    jdbc:postgresql://*)
+      ;;
+  esac
+}
+
+normalize_database_url
+
 postgres_profile_active=false
 case ",${SPRING_PROFILES_ACTIVE:-}," in
   *,postgres,*) postgres_profile_active=true ;;
@@ -45,14 +65,14 @@ fi
 export DB_CONNECT_RETRIES="${DATABASE_PRIMARY_CONNECT_RETRIES:-1}"
 export DB_CONNECTION_TIMEOUT="${DATABASE_PRIMARY_CONNECTION_TIMEOUT:-5000}"
 
-echo "BusBD startup: testing the configured PostgreSQL/Neon connection before accepting traffic."
+echo "BusBD startup: testing the configured PostgreSQL connection before accepting traffic."
 run_java_in_background
 
 attempt=1
 while [ "${attempt}" -le "${PRIMARY_ATTEMPTS}" ]; do
   if wget -q -T 3 -O /tmp/busbd-primary-health.json "${HEALTH_URL}" 2>/dev/null \
       && grep -q '"status":"UP"' /tmp/busbd-primary-health.json; then
-    echo "BusBD startup: PostgreSQL/Neon is healthy; continuing with the persistent database."
+    echo "BusBD startup: PostgreSQL is healthy; continuing with the persistent database."
     wait "${APP_PID}"
     exit $?
   fi
@@ -67,7 +87,7 @@ while [ "${attempt}" -le "${PRIMARY_ATTEMPTS}" ]; do
 done
 
 if kill -0 "${APP_PID}" 2>/dev/null; then
-  echo "BusBD startup: PostgreSQL/Neon did not become healthy in time; stopping the primary startup."
+  echo "BusBD startup: PostgreSQL did not become healthy in time; stopping the primary startup."
   kill -TERM "${APP_PID}" 2>/dev/null || true
   wait "${APP_PID}" 2>/dev/null || true
 fi
