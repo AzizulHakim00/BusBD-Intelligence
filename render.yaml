@@ -11,11 +11,11 @@ services:
     runtime: docker
     plan: free
     dockerfilePath: ./Dockerfile
-    healthCheckPath: /actuator/health
+    healthCheckPath: /actuator/health/liveness
     autoDeployTrigger: commit
     envVars:
-      # The production service uses the existing Neon PostgreSQL database.
-      # Secret values stay in Render and are never committed to GitHub.
+      # Production uses the existing Neon PostgreSQL database. Secret values
+      # remain configured in Render and are never committed to GitHub.
       - key: SPRING_PROFILES_ACTIVE
         value: postgres
       - key: DATABASE_URL
@@ -36,12 +36,16 @@ services:
       - key: DEMO_MODE
         value: "true"
       - key: DB_POOL_MAX
-        value: "5"
+        value: "3"
       - key: DB_POOL_MIN
-        value: "1"
+        value: "0"
+      - key: DB_CONNECT_RETRIES
+        value: "12"
+      - key: DB_CONNECT_RETRY_INTERVAL
+        value: "5s"
       - key: H2_CONSOLE_ENABLED
         value: "false"
       - key: REDIS_HEALTH_ENABLED
         value: "false"
       - key: JAVA_OPTS
-        value: -XX:MaxRAMPercentage=72.0
+        value: "-Xms64m -Xmx256m -XX:+UseSerialGC -XX:ActiveProcessorCount=1 -Djava.security.egd=file:/dev/./urandom"
