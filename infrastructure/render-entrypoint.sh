@@ -49,6 +49,13 @@ normalize_database_url() {
 
 normalize_database_url
 
+# CI uses this mode to verify Render's connection-string conversion without
+# launching the application or exposing database credentials in logs.
+if [ "${BUSBD_VALIDATE_DATABASE_URL_ONLY:-false}" = "true" ]; then
+  printf '%s\n' "${DATABASE_URL:-}"
+  exit 0
+fi
+
 postgres_profile_active=false
 case ",${SPRING_PROFILES_ACTIVE:-}," in
   *,postgres,*) postgres_profile_active=true ;;
