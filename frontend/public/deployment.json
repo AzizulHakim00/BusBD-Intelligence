@@ -1,9 +1,12 @@
 {
   "application": "BusBD Intelligence",
   "frontend": "functional-har-design",
-  "version": "2026.07.22.3-platform",
+  "version": "2026.07.22.4-safety",
   "expectedHeading": "Every journey, intelligently connected.",
   "journeyAssistant": true,
+  "smartJourneyWatches": true,
+  "journeyGuard": true,
+  "emergencyLocationShare": true,
   "smartTripCompare": true,
   "passengerAccount": true,
   "ticketVerification": true,
