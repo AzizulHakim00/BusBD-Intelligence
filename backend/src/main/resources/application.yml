@@ -1,11 +1,19 @@
 server:
   port: ${PORT:8080}
+  forward-headers-strategy: ${SERVER_FORWARD_HEADERS_STRATEGY:framework}
+  shutdown: graceful
   compression:
     enabled: true
+  error:
+    include-message: never
+    include-stacktrace: never
+    include-binding-errors: never
 
 spring:
   application:
     name: busbd-intelligence
+  lifecycle:
+    timeout-per-shutdown-phase: 20s
   datasource:
     url: ${DATABASE_URL:jdbc:h2:mem:busbd;MODE=PostgreSQL;DB_CLOSE_DELAY=-1;DATABASE_TO_LOWER=TRUE}
     username: ${DATABASE_USERNAME:sa}
@@ -29,12 +37,12 @@ spring:
     open-in-view: false
     properties:
       hibernate:
-        format_sql: true
+        format_sql: false
         jdbc:
           time_zone: UTC
   h2:
     console:
-      enabled: ${H2_CONSOLE_ENABLED:true}
+      enabled: ${H2_CONSOLE_ENABLED:false}
       path: /h2-console
   data:
     redis:
@@ -49,10 +57,10 @@ management:
   endpoints:
     web:
       exposure:
-        include: health,info,metrics,flyway
+        include: ${MANAGEMENT_ENDPOINTS_WEB_EXPOSURE_INCLUDE:health,info}
   endpoint:
     health:
-      show-details: always
+      show-details: ${MANAGEMENT_ENDPOINT_HEALTH_SHOW_DETAILS:when_authorized}
       probes:
         enabled: true
   health:
@@ -65,9 +73,11 @@ management:
 
 springdoc:
   swagger-ui:
+    enabled: ${SPRINGDOC_SWAGGER_UI_ENABLED:true}
     path: /swagger-ui.html
     operationsSorter: method
   api-docs:
+    enabled: ${SPRINGDOC_API_DOCS_ENABLED:true}
     path: /api-docs
 
 busbd:
