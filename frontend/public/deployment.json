@@ -1,7 +1,9 @@
 {
   "application": "BusBD Intelligence",
   "frontend": "functional-har-design",
-  "version": "2026.07.21.3",
+  "version": "2026.07.22.2-lively",
   "expectedHeading": "Every journey, intelligently connected.",
+  "journeyAssistant": true,
+  "fullWorkflowSmoke": true,
   "rootApplication": true
 }
