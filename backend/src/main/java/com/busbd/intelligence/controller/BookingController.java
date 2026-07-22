@@ -7,12 +7,14 @@ import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotEmpty;
 import org.springframework.security.core.Authentication;
+import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.*;
 
 @RestController
 @RequestMapping("/api")
+@Validated
 public class BookingController {
     public record HoldRequest(UUID tripId, @NotEmpty List<String> seats, @Email String ownerEmail) { }
     public record PassengerRequest(@NotBlank String fullName, String passengerType, String gender, @NotBlank String seatNumber, String phone) { }
@@ -41,7 +43,20 @@ public class BookingController {
                 request.passengerPhone(), request.paymentProvider(), request.boardingPoint(), request.droppingPoint(), request.promoCode(), idempotency, passengers));
     }
     @GetMapping("/bookings/{reference}")
-    public Map<String, Object> booking(@PathVariable String reference) { return bookingService.booking(reference); }
+    public Map<String, Object> booking(@PathVariable String reference,
+                                       @RequestParam @NotBlank @Email String email) {
+        Map<String, Object> fullView = bookingService.booking(reference);
+        Object ownerEmail = fullView.get("passengerEmail");
+        if (!(ownerEmail instanceof String owner) || !owner.equalsIgnoreCase(email.trim())) {
+            // Use the same not-found response for wrong references and wrong emails to prevent account enumeration.
+            throw new NoSuchElementException("Booking not found");
+        }
+        Map<String, Object> safeView = new LinkedHashMap<>(fullView);
+        for (String sensitive : List.of("passengerEmail", "passengerPhone", "passengers", "ticketToken", "paymentReference", "promoCode")) {
+            safeView.remove(sensitive);
+        }
+        return safeView;
+    }
     @GetMapping("/bookings")
     public List<Map<String, Object>> mine(Authentication authentication) { return bookingService.bookingsForUser(authentication.getName()); }
     @PostMapping("/bookings/{reference}/cancel")
