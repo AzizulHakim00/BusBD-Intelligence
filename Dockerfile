@@ -43,12 +43,16 @@ FROM eclipse-temurin:21-jre-alpine
 WORKDIR /app
 RUN addgroup -S busbd && adduser -S busbd -G busbd
 COPY --from=backend-build /workspace/target/busbd-intelligence-1.0.0.jar app.jar
+COPY infrastructure/render-entrypoint.sh /app/render-entrypoint.sh
+RUN chmod 755 /app/render-entrypoint.sh \
+    && chown busbd:busbd /app/render-entrypoint.sh /app/app.jar
 USER busbd
 EXPOSE 8080
 
 # Stay safely below the Render Free memory ceiling and reduce startup pressure.
 ENV JAVA_OPTS="-Xms64m -Xmx256m -XX:+UseSerialGC -XX:ActiveProcessorCount=1 -Djava.security.egd=file:/dev/./urandom"
 
-# Render performs the authoritative HTTP liveness check. A Docker HEALTHCHECK
-# is intentionally omitted so two independent health systems cannot conflict.
-ENTRYPOINT ["sh", "-c", "exec java $JAVA_OPTS -jar app.jar"]
+# The entrypoint keeps Neon as the primary database. When explicitly enabled,
+# it falls back to the seeded H2 demo database instead of allowing a stale
+# external database secret to cancel the entire Render deployment.
+ENTRYPOINT ["/app/render-entrypoint.sh"]

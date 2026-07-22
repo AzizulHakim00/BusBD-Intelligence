@@ -40,7 +40,7 @@ jobs:
       - name: Build final image quietly
         run: docker build --quiet -t busbd-intelligence:ci .
 
-      - name: Start final image with Render-style limits
+      - name: Start normal demo image with Render-style limits
         run: |
           docker run -d --name busbd-ci \
             -p 8080:8080 \
@@ -81,11 +81,63 @@ jobs:
           curl --fail --silent --show-error "http://127.0.0.1:8080${JS_PATH}" -o /tmp/app.js
           test -s /tmp/app.js
 
-      - name: Capture complete startup diagnostics
+      - name: Save normal startup diagnostics
+        run: |
+          docker logs busbd-ci > /tmp/container-normal.log 2>&1
+          docker inspect busbd-ci > /tmp/container-normal-inspect.json 2>&1
+          docker rm -f busbd-ci
+
+      - name: Start with intentionally invalid Neon credentials
+        run: |
+          docker run -d --name busbd-fallback-ci \
+            -p 8081:8080 \
+            -e PORT=8080 \
+            -e SPRING_PROFILES_ACTIVE=postgres \
+            -e DATABASE_URL='jdbc:postgresql://127.0.0.1:1/busbd?sslmode=require' \
+            -e DATABASE_USERNAME=invalid \
+            -e DATABASE_PASSWORD=invalid \
+            -e DATABASE_FALLBACK_ENABLED=true \
+            -e DATABASE_PRIMARY_STARTUP_ATTEMPTS=5 \
+            -e DB_CONNECT_RETRIES=0 \
+            -e DB_CONNECTION_TIMEOUT=1000 \
+            -e DB_POOL_MAX=3 \
+            -e DB_POOL_MIN=0 \
+            -e REDIS_HEALTH_ENABLED=false \
+            -e JAVA_OPTS='-Xms64m -Xmx256m -XX:+UseSerialGC -XX:ActiveProcessorCount=1' \
+            busbd-intelligence:ci
+
+      - name: Verify failed Neon startup automatically recovers
+        run: |
+          : > /tmp/fallback-endpoint-status.log
+          for attempt in $(seq 1 60); do
+            ROOT_CODE=$(curl --silent --output /dev/null --write-out '%{http_code}' http://127.0.0.1:8081/ || true)
+            HEALTH_CODE=$(curl --silent --output /dev/null --write-out '%{http_code}' http://127.0.0.1:8081/actuator/health || true)
+            LIVE_CODE=$(curl --silent --output /dev/null --write-out '%{http_code}' http://127.0.0.1:8081/actuator/health/liveness || true)
+            READY_CODE=$(curl --silent --output /dev/null --write-out '%{http_code}' http://127.0.0.1:8081/actuator/health/readiness || true)
+            echo "attempt=${attempt} root=${ROOT_CODE} health=${HEALTH_CODE} liveness=${LIVE_CODE} readiness=${READY_CODE}" | tee -a /tmp/fallback-endpoint-status.log
+            if [ "$ROOT_CODE" = "200" ] && [ "$HEALTH_CODE" = "200" ] && [ "$LIVE_CODE" = "200" ] && [ "$READY_CODE" = "200" ]; then
+              docker logs busbd-fallback-ci 2>&1 | grep -q 'using the seeded in-memory demo database'
+              exit 0
+            fi
+            if ! docker inspect --format='{{.State.Running}}' busbd-fallback-ci 2>/dev/null | grep -q true; then
+              echo 'Fallback container exited before becoming healthy.' | tee -a /tmp/fallback-endpoint-status.log
+              exit 1
+            fi
+            sleep 2
+          done
+          echo 'Database fallback did not become healthy in time.' | tee -a /tmp/fallback-endpoint-status.log
+          exit 1
+
+      - name: Verify frontend after database fallback
+        run: |
+          curl --fail --silent --show-error http://127.0.0.1:8081/ -o /tmp/fallback-index.html
+          grep -q 'functional-har-design' /tmp/fallback-index.html
+
+      - name: Capture fallback diagnostics
         if: always()
         run: |
-          docker logs busbd-ci > /tmp/container.log 2>&1 || true
-          docker inspect busbd-ci > /tmp/container-inspect.json 2>&1 || true
+          docker logs busbd-fallback-ci > /tmp/container-fallback.log 2>&1 || true
+          docker inspect busbd-fallback-ci > /tmp/container-fallback-inspect.json 2>&1 || true
 
       - name: Upload startup diagnostics
         if: always()
@@ -93,16 +145,23 @@ jobs:
         with:
           name: render-startup-diagnostics
           path: |
-            /tmp/container.log
-            /tmp/container-inspect.json
+            /tmp/container-normal.log
+            /tmp/container-normal-inspect.json
             /tmp/endpoint-status.log
+            /tmp/container-fallback.log
+            /tmp/container-fallback-inspect.json
+            /tmp/fallback-endpoint-status.log
           if-no-files-found: warn
           retention-days: 3
 
       - name: Print application logs on failure
         if: failure()
-        run: docker logs --tail 160 busbd-ci || true
+        run: |
+          docker logs --tail 160 busbd-ci 2>/dev/null || true
+          docker logs --tail 240 busbd-fallback-ci 2>/dev/null || true
 
-      - name: Stop test container
+      - name: Stop test containers
         if: always()
-        run: docker rm -f busbd-ci || true
+        run: |
+          docker rm -f busbd-ci 2>/dev/null || true
+          docker rm -f busbd-fallback-ci 2>/dev/null || true

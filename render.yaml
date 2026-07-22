@@ -11,14 +11,14 @@ services:
     runtime: docker
     plan: free
     dockerfilePath: ./Dockerfile
-    # The public root is intentionally used for Render's deployment check.
-    # It is independent of Spring Security health-group authorization and is
-    # available only after the complete application has started successfully.
+    # The public root is independent of database health and Spring Security.
+    # It is available after either persistent Neon startup or the seeded demo
+    # fallback has completed.
     healthCheckPath: /
     autoDeployTrigger: commit
     envVars:
-      # Production uses the existing Neon PostgreSQL database. Secret values
-      # remain configured in Render and are never committed to GitHub.
+      # Neon remains the primary persistent database. Secret values stay in
+      # Render and are never committed to GitHub.
       - key: SPRING_PROFILES_ACTIVE
         value: postgres
       - key: DATABASE_URL
@@ -38,6 +38,10 @@ services:
         sync: false
       - key: DEMO_MODE
         value: "true"
+      - key: DATABASE_FALLBACK_ENABLED
+        value: "true"
+      - key: DATABASE_PRIMARY_STARTUP_ATTEMPTS
+        value: "60"
       - key: DB_POOL_MAX
         value: "3"
       - key: DB_POOL_MIN
