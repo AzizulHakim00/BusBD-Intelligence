@@ -37,8 +37,14 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Build final image quietly
-        run: docker build --quiet -t busbd-intelligence:ci .
+      - name: Build final image with one transient retry
+        run: |
+          set -o pipefail
+          if ! docker build --progress=plain -t busbd-intelligence:ci . 2>&1 | tee /tmp/docker-build.log; then
+            echo 'First Docker build failed. Retrying once after a short delay.' | tee -a /tmp/docker-build.log
+            sleep 10
+            docker build --progress=plain -t busbd-intelligence:ci . 2>&1 | tee -a /tmp/docker-build.log
+          fi
 
       - name: Start normal demo image with Render-style limits
         run: |
@@ -145,6 +151,7 @@ jobs:
         with:
           name: render-startup-diagnostics
           path: |
+            /tmp/docker-build.log
             /tmp/container-normal.log
             /tmp/container-normal-inspect.json
             /tmp/endpoint-status.log
@@ -157,6 +164,7 @@ jobs:
       - name: Print application logs on failure
         if: failure()
         run: |
+          tail -n 200 /tmp/docker-build.log 2>/dev/null || true
           docker logs --tail 160 busbd-ci 2>/dev/null || true
           docker logs --tail 240 busbd-fallback-ci 2>/dev/null || true
 

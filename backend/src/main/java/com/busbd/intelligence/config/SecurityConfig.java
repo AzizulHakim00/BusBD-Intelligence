@@ -23,7 +23,17 @@ public class SecurityConfig {
                 .headers(headers -> headers.frameOptions(frame -> frame.sameOrigin()))
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(auth -> auth
-                        .requestMatchers("/", "/index.html", "/assets/**", "/app/**", "/favicon.svg", "/error").permitAll()
+                        .requestMatchers(
+                                "/",
+                                "/index.html",
+                                "/assets/**",
+                                "/app/**",
+                                "/favicon.svg",
+                                "/manifest.webmanifest",
+                                "/sw.js",
+                                "/deployment.json",
+                                "/error"
+                        ).permitAll()
                         .requestMatchers("/api/auth/login", "/api/auth/register", "/api/public/**", "/ws/**").permitAll()
                         .requestMatchers(
                                 "/swagger-ui/**",
