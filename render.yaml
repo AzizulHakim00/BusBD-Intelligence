@@ -11,7 +11,10 @@ services:
     runtime: docker
     plan: free
     dockerfilePath: ./Dockerfile
-    healthCheckPath: /actuator/health/liveness
+    # The public root is intentionally used for Render's deployment check.
+    # It is independent of Spring Security health-group authorization and is
+    # available only after the complete application has started successfully.
+    healthCheckPath: /
     autoDeployTrigger: commit
     envVars:
       # Production uses the existing Neon PostgreSQL database. Secret values
