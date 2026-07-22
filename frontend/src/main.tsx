@@ -15,7 +15,8 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
   </React.StrictMode>
 )
 
-if ('serviceWorker' in navigator && import.meta.env.PROD) {
+const localHostnames = new Set(['localhost', '127.0.0.1', '::1'])
+if ('serviceWorker' in navigator && !localHostnames.has(window.location.hostname)) {
   window.addEventListener('load', () => {
     navigator.serviceWorker.register('/sw.js').catch(() => undefined)
   })
