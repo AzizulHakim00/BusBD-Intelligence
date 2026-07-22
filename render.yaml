@@ -7,18 +7,15 @@ services:
     persistenceMode: off
 
   - type: web
+    # This clean service and URL are the canonical BusBD deployment.
+    # The older busbd-intelligence-7o16 hostname is redirected in index.html.
     name: busbd-intelligence
     runtime: docker
     plan: free
     dockerfilePath: ./Dockerfile
-    # The public root is independent of database health and Spring Security.
-    # It is available after either persistent Neon startup or the seeded demo
-    # fallback has completed.
     healthCheckPath: /
     autoDeployTrigger: commit
     envVars:
-      # Neon remains the primary persistent database. Secret values stay in
-      # Render and are never committed to GitHub.
       - key: SPRING_PROFILES_ACTIVE
         value: postgres
       - key: DATABASE_URL
@@ -41,15 +38,15 @@ services:
       - key: DATABASE_FALLBACK_ENABLED
         value: "true"
       - key: DATABASE_PRIMARY_STARTUP_ATTEMPTS
-        value: "60"
+        value: "15"
+      - key: DATABASE_PRIMARY_CONNECT_RETRIES
+        value: "1"
+      - key: DATABASE_PRIMARY_CONNECTION_TIMEOUT
+        value: "5000"
       - key: DB_POOL_MAX
         value: "3"
       - key: DB_POOL_MIN
         value: "0"
-      - key: DB_CONNECT_RETRIES
-        value: "12"
-      - key: DB_CONNECT_RETRY_INTERVAL
-        value: "5s"
       - key: H2_CONSOLE_ENABLED
         value: "false"
       - key: REDIS_HEALTH_ENABLED
