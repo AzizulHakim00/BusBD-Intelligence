@@ -3,11 +3,11 @@ set -u
 
 PORT_VALUE="${PORT:-8080}"
 HEALTH_URL="http://127.0.0.1:${PORT_VALUE}/actuator/health"
-PRIMARY_ATTEMPTS="${DATABASE_PRIMARY_STARTUP_ATTEMPTS:-15}"
+PRIMARY_ATTEMPTS="${DATABASE_PRIMARY_STARTUP_ATTEMPTS:-3}"
 case "${PRIMARY_ATTEMPTS}" in
-  ''|*[!0-9]*) PRIMARY_ATTEMPTS=15 ;;
+  ''|*[!0-9]*) PRIMARY_ATTEMPTS=3 ;;
 esac
-if [ "${PRIMARY_ATTEMPTS}" -gt 15 ]; then PRIMARY_ATTEMPTS=15; fi
+if [ "${PRIMARY_ATTEMPTS}" -gt 6 ]; then PRIMARY_ATTEMPTS=6; fi
 APP_PID=""
 
 forward_signal() {
@@ -27,6 +27,25 @@ run_java_in_background() {
 run_java_in_foreground() {
   # shellcheck disable=SC2086
   exec java ${JAVA_OPTS:-} -jar app.jar
+}
+
+stop_primary() {
+  if ! kill -0 "${APP_PID}" 2>/dev/null; then
+    wait "${APP_PID}" 2>/dev/null || true
+    return
+  fi
+
+  kill -TERM "${APP_PID}" 2>/dev/null || true
+  stop_attempt=1
+  while kill -0 "${APP_PID}" 2>/dev/null && [ "${stop_attempt}" -le 10 ]; do
+    sleep 1
+    stop_attempt=$((stop_attempt + 1))
+  done
+  if kill -0 "${APP_PID}" 2>/dev/null; then
+    echo "BusBD startup: primary process did not stop in time; forcing shutdown."
+    kill -KILL "${APP_PID}" 2>/dev/null || true
+  fi
+  wait "${APP_PID}" 2>/dev/null || true
 }
 
 normalize_database_url() {
@@ -95,8 +114,7 @@ done
 
 if kill -0 "${APP_PID}" 2>/dev/null; then
   echo "BusBD startup: PostgreSQL did not become healthy in time; stopping the primary startup."
-  kill -TERM "${APP_PID}" 2>/dev/null || true
-  wait "${APP_PID}" 2>/dev/null || true
+  stop_primary
 fi
 
 echo "BusBD startup: using the seeded in-memory demo database for this instance."

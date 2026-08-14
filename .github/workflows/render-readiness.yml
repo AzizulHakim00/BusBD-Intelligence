@@ -54,7 +54,7 @@ jobs:
           assert web.get('branch') == 'main'
           assert web.get('region') == 'singapore'
           assert web.get('healthCheckPath') == '/actuator/health/readiness'
-          assert web.get('autoDeployTrigger') == 'checksPass'
+          assert web.get('autoDeployTrigger') == 'commit'
           assert web.get('renderSubdomainPolicy') == 'enabled'
           assert database.get('plan') == 'free'
           assert database.get('region') == web.get('region')

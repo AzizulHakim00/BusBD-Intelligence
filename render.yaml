@@ -16,7 +16,7 @@ services:
     plan: free
     dockerfilePath: ./Dockerfile
     healthCheckPath: /actuator/health/readiness
-    autoDeployTrigger: checksPass
+    autoDeployTrigger: commit
     renderSubdomainPolicy: enabled
     envVars:
       - key: SPRING_PROFILES_ACTIVE
@@ -51,7 +51,7 @@ services:
       - key: DATABASE_FALLBACK_ENABLED
         value: "true"
       - key: DATABASE_PRIMARY_STARTUP_ATTEMPTS
-        value: "15"
+        value: "3"
       - key: DATABASE_PRIMARY_CONNECT_RETRIES
         value: "1"
       - key: DATABASE_PRIMARY_CONNECTION_TIMEOUT
