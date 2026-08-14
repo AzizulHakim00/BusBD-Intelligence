@@ -30,4 +30,8 @@ public class AuthController {
     public Map<String, Object> update(@RequestBody ProfileRequest request, Authentication authentication) {
         return authService.updateProfile(authentication.getName(), new AuthService.ProfileCommand(request.fullName(), request.phone(), request.emergencyContact(), request.preferredLanguage()));
     }
+    @DeleteMapping("/me")
+    public Map<String, Object> delete(Authentication authentication) {
+        return authService.deleteAccount(authentication.getName());
+    }
 }

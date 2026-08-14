@@ -24,6 +24,10 @@ public class PlatformStore {
         return em.merge(entity);
     }
 
+    public void delete(Object entity) {
+        em.remove(em.contains(entity) ? entity : em.merge(entity));
+    }
+
     public void flush() { em.flush(); }
     public Optional<UserAccount> userByEmail(String email) {
         if (email == null) return Optional.empty();

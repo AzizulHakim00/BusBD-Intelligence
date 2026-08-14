@@ -57,6 +57,20 @@ public class AuthService {
         return userView(user);
     }
 
+    public Map<String, Object> deleteAccount(String email) {
+        UserAccount user = store.userByEmail(email).orElseThrow();
+        if (!"PASSENGER".equals(user.getRole())) {
+            throw new IllegalArgumentException("Only passenger accounts can be self-deleted");
+        }
+        if (!store.bookingsByEmail(email).isEmpty()) {
+            throw new IllegalStateException("Cancel or retain existing ticket records before deleting this account");
+        }
+        store.save(new AuditLog(email, "PASSENGER_ACCOUNT_DELETED", "UserAccount", user.getId().toString(), "Passenger requested account deletion"));
+        store.delete(user);
+        store.flush();
+        return Map.of("deleted", true);
+    }
+
     private Map<String, Object> authenticated(UserAccount user, String message) {
         return Map.of("token", jwtService.issue(user.getEmail(), user.getRole(), user.getFullName()), "user", userView(user), "message", message);
     }
