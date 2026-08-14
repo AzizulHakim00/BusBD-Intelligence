@@ -72,6 +72,7 @@ jobs:
           assert env['SPRINGDOC_SWAGGER_UI_ENABLED'].get('value') == 'false'
           assert env['SPRINGDOC_API_DOCS_ENABLED'].get('value') == 'false'
           assert env['H2_CONSOLE_ENABLED'].get('value') == 'false'
+          assert env['DATABASE_PRIMARY_STARTUP_ATTEMPTS'].get('value') == '12'
           assert env['MANAGEMENT_ENDPOINT_HEALTH_SHOW_DETAILS'].get('value') == 'never'
           assert env['MANAGEMENT_ENDPOINTS_WEB_EXPOSURE_INCLUDE'].get('value') == 'health,info'
           print('Render Blueprint structure and production hardening are deployment-ready.')

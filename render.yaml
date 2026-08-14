@@ -51,7 +51,7 @@ services:
       - key: DATABASE_FALLBACK_ENABLED
         value: "true"
       - key: DATABASE_PRIMARY_STARTUP_ATTEMPTS
-        value: "3"
+        value: "12"
       - key: DATABASE_PRIMARY_CONNECT_RETRIES
         value: "1"
       - key: DATABASE_PRIMARY_CONNECTION_TIMEOUT

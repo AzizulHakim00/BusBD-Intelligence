@@ -2,6 +2,7 @@ package com.busbd.intelligence.controller;
 
 import com.busbd.intelligence.domain.*;
 import com.busbd.intelligence.repository.PlatformStore;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.*;
@@ -10,13 +11,26 @@ import java.util.*;
 @RequestMapping("/api/public")
 public class PublicController {
     private final PlatformStore store;
-    public PublicController(PlatformStore store) { this.store = store; }
+    private final String databaseUrl;
+    private final String redisUrl;
+    public PublicController(PlatformStore store,
+                            @Value("${spring.datasource.url:}") String databaseUrl,
+                            @Value("${spring.data.redis.url:}") String redisUrl) {
+        this.store = store;
+        this.databaseUrl = databaseUrl;
+        this.redisUrl = redisUrl;
+    }
 
     @GetMapping("/summary")
     public Map<String, Object> summary() {
+        boolean persistent = databaseUrl.startsWith("jdbc:postgresql:");
+        boolean redisBacked = redisUrl.startsWith("redis://") || redisUrl.startsWith("rediss://");
         return Map.of("districtsConnected", 62, "verifiedOperators", store.count(TransportOperator.class),
                 "buses", store.count(Bus.class), "scheduledTrips", store.futureTrips().size(),
-                "etaAccuracy", 91, "networkStatus", "HEALTHY", "storage", "POSTGRES_READY", "seatLocking", "REDIS_READY");
+                "etaAccuracy", 91, "networkStatus", "HEALTHY",
+                "storage", persistent ? "POSTGRES_PERSISTENT" : "DEMO_IN_MEMORY",
+                "persistent", persistent,
+                "seatLocking", redisBacked ? "REDIS_BACKED" : "IN_MEMORY");
     }
     @GetMapping("/operators") public List<TransportOperator> operators() { return store.operators(); }
     @GetMapping("/routes") public List<RoutePlan> routes() { return store.routes(); }
