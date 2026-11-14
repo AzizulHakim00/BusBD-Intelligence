@@ -3,6 +3,18 @@ import type { BookingView, DriverAssignment, Location, PassengerInput, Seat, Tri
 const tokenKey = 'busbd_token'
 const bookingEmailKey = 'busbd_last_booking_email'
 
+export const token = () => localStorage.getItem(tokenKey)
+export const saveToken = (value: string | null) => value ? localStorage.setItem(tokenKey, value) : localStorage.removeItem(tokenKey)
+
+const requestBookingEmail = () => {
+  const remembered = localStorage.getItem(bookingEmailKey) || ''
+  const entered = window.prompt('Enter the email used for this booking:', remembered)
+  if (!entered?.trim()) throw new Error('The booking email is required to view this ticket.')
+  const normalized = entered.trim().toLowerCase()
+  localStorage.setItem(bookingEmailKey, normalized)
+  return normalized
+}
+
 async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
   const headers = new Headers(init.headers)
   if (init.body) headers.set('Content-Type', 'application/json')
