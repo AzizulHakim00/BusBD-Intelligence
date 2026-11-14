@@ -26,7 +26,7 @@ public class Refund {
 
     public Refund(UUID bookingId, BigDecimal amount, String reason) {
         this.bookingId = bookingId; this.amount = amount; this.reason = reason;
-        this.status = "COMPLETED"; this.processedAt = Instant.now();
-        this.providerReference = "RFD-" + UUID.randomUUID().toString().substring(0, 8).toUpperCase();
+        this.status = "SIMULATED"; this.processedAt = null;
+        this.providerReference = null;
     }
 }

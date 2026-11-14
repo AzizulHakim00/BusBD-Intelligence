@@ -16,9 +16,9 @@ import java.util.*;
 @RequestMapping("/api")
 @Validated
 public class BookingController {
-    public record HoldRequest(UUID tripId, @NotEmpty List<String> seats, @Email String ownerEmail) { }
+    public record HoldRequest(UUID tripId, @NotEmpty List<String> seats, @NotBlank @Email String ownerEmail) { }
     public record PassengerRequest(@NotBlank String fullName, String passengerType, String gender, @NotBlank String seatNumber, String phone) { }
-    public record ConfirmRequest(@NotBlank String holdId, @NotBlank String passengerName, @Email String passengerEmail,
+    public record ConfirmRequest(@NotBlank String holdId, @NotBlank String passengerName, @NotBlank @Email String passengerEmail,
                                  String passengerPhone, String paymentProvider, String boardingPoint, String droppingPoint,
                                  String promoCode, String idempotencyKey, List<PassengerRequest> passengers) { }
     public record CancelRequest(String reason) { }
@@ -56,18 +56,13 @@ public class BookingController {
                                       Authentication authentication) {
         boolean authenticated = authentication != null && authentication.isAuthenticated()
                 && !"anonymousUser".equalsIgnoreCase(authentication.getName());
-        boolean privileged = authenticated && authentication.getAuthorities().stream()
-                .anyMatch(a -> Set.of("ROLE_SUPER_ADMIN", "ROLE_OPERATOR_STAFF", "ROLE_SUPPORT_AGENT").contains(a.getAuthority()));
-        String actor;
-        if (authenticated) {
-            actor = authentication.getName();
-        } else {
-            if (email == null || email.isBlank()) throw new NoSuchElementException("Booking not found");
-            // Validate the same booking-reference + email pair before allowing guest cancellation.
-            safeGuestView(reference, email);
-            actor = email.trim();
+        if (!authenticated) {
+            throw new SecurityException("Please sign in with the booking account to cancel this booking");
         }
-        return bookingService.cancel(reference, actor, privileged, request == null ? null : request.reason());
+        boolean privileged = authentication.getAuthorities().stream()
+                .anyMatch(a -> Set.of("ROLE_SUPER_ADMIN", "ROLE_OPERATOR_STAFF", "ROLE_SUPPORT_AGENT").contains(a.getAuthority()));
+        return bookingService.cancel(reference, authentication.getName(), privileged,
+                request == null ? null : request.reason());
     }
     @PostMapping("/tickets/verify")
     public Map<String, Object> verify(@Valid @RequestBody VerifyRequest request) { return bookingService.verifyTicket(request.token()); }

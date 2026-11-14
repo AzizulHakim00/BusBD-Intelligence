@@ -6,20 +6,14 @@ const bookingEmailKey = 'busbd_last_booking_email'
 export const token = () => localStorage.getItem(tokenKey)
 export const saveToken = (value: string | null) => value ? localStorage.setItem(tokenKey, value) : localStorage.removeItem(tokenKey)
 
-const rememberBookingEmail = (email: string) => {
-  const normalized = email.trim().toLowerCase()
-  if (normalized) localStorage.setItem(bookingEmailKey, normalized)
-  return normalized
-}
-
 const requestBookingEmail = () => {
   const remembered = localStorage.getItem(bookingEmailKey) || ''
   const entered = window.prompt('Enter the email used for this booking:', remembered)
-  if (!entered?.trim()) throw new Error('The booking email is required to protect your ticket.')
-  return rememberBookingEmail(entered)
+  if (!entered?.trim()) throw new Error('The booking email is required to view this ticket.')
+  const normalized = entered.trim().toLowerCase()
+  localStorage.setItem(bookingEmailKey, normalized)
+  return normalized
 }
-
-const savedOrRequestedBookingEmail = () => localStorage.getItem(bookingEmailKey) || requestBookingEmail()
 
 async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
   const headers = new Headers(init.headers)
@@ -39,7 +33,6 @@ export const api = {
   seats: (tripId: string) => request<{ seats: Seat[]; seatCount: number; coachType: string; seatLayout: string; lockMinutes: number }>(`/api/trips/${tripId}/seats`),
   hold: (tripId: string, seats: string[], ownerEmail: string) => request<{ id: string; expiresAt: string }>('/api/seat-holds', { method: 'POST', body: JSON.stringify({ tripId, seats, ownerEmail }) }),
   book: (payload: { holdId: string; passengerName: string; passengerEmail: string; passengerPhone: string; paymentProvider: string; boardingPoint?: string; droppingPoint?: string; promoCode?: string; idempotencyKey?: string; passengers?: PassengerInput[] }) => {
-    rememberBookingEmail(payload.passengerEmail)
     return request<BookingView>('/api/bookings', { method: 'POST', headers: payload.idempotencyKey ? { 'Idempotency-Key': payload.idempotencyKey } : {}, body: JSON.stringify(payload) })
   },
   booking: (reference: string) => {
@@ -47,10 +40,8 @@ export const api = {
     return request<BookingView>(`/api/bookings/${encodeURIComponent(reference)}?email=${encodeURIComponent(email)}`)
   },
   myBookings: () => request<BookingView[]>('/api/bookings'),
-  cancelBooking: (reference: string, reason = 'Passenger cancellation') => {
-    const email = savedOrRequestedBookingEmail()
-    return request<BookingView>(`/api/bookings/${encodeURIComponent(reference)}/cancel?email=${encodeURIComponent(email)}`, { method: 'POST', body: JSON.stringify({ reason }) })
-  },
+  cancelBooking: (reference: string, reason = 'Passenger cancellation') =>
+    request<BookingView>(`/api/bookings/${encodeURIComponent(reference)}/cancel`, { method: 'POST', body: JSON.stringify({ reason }) }),
   verifyTicket: (ticketToken: string) => request<Record<string, unknown>>('/api/tickets/verify', { method: 'POST', body: JSON.stringify({ token: ticketToken }) }),
   locations: () => request<Location[]>('/api/tracking/locations'),
   tripTracking: (tripId: string) => request<Record<string, unknown>>(`/api/tracking/trips/${tripId}`),
