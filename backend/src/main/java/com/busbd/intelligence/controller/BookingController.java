@@ -18,7 +18,7 @@ import java.util.*;
 public class BookingController {
     public record HoldRequest(UUID tripId, @NotEmpty List<String> seats, @NotBlank @Email String ownerEmail) { }
     public record PassengerRequest(@NotBlank String fullName, String passengerType, String gender, @NotBlank String seatNumber, String phone) { }
-    public record ConfirmRequest(@NotBlank String holdId, @NotBlank String passengerName, @Email String passengerEmail,
+    public record ConfirmRequest(@NotBlank String holdId, @NotBlank String passengerName, @NotBlank @Email String passengerEmail,
                                  String passengerPhone, String paymentProvider, String boardingPoint, String droppingPoint,
                                  String promoCode, String idempotencyKey, List<PassengerRequest> passengers) { }
     public record CancelRequest(String reason) { }
