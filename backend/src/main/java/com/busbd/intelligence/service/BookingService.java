@@ -97,6 +97,12 @@ public class BookingService {
         if (prior.isPresent()) return bookingView(prior.get());
         SeatLockService.SeatHold hold = seatLocks.get(command.holdId())
                 .orElseThrow(() -> new IllegalStateException("Seat hold expired. Please select seats again."));
+        if (hold.owner() == null || !hold.owner().equalsIgnoreCase(command.passengerEmail().trim())) {
+            throw new SecurityException("This seat hold does not belong to the booking passenger");
+        }
+        if (hold.expiresAt().isBefore(Instant.now())) {
+            throw new IllegalStateException("Seat hold expired. Please select seats again.");
+        }
         Trip trip = store.trip(hold.tripId()).orElseThrow(() -> new NoSuchElementException("Trip not found"));
         Bus bus = store.bus(trip.getBusId()).orElseThrow();
         RoutePlan route = store.route(trip.getRouteId()).orElseThrow();
@@ -162,7 +168,7 @@ public class BookingService {
         booking.setStatus("CANCELLED");
         booking.setCancellationReason(Optional.ofNullable(reason).orElse("Passenger cancellation"));
         booking.setCancelledAt(Instant.now());
-        booking.setRefundStatus("COMPLETED");
+        booking.setRefundStatus("SIMULATED");
         booking.setRefundAmount(refundAmount);
         store.save(booking);
         store.save(new Refund(booking.getId(), refundAmount, booking.getCancellationReason()));
@@ -170,7 +176,7 @@ public class BookingService {
         trip.setAvailableSeats(Math.min(store.bus(trip.getBusId()).orElseThrow().getSeatCount(),
                 trip.getAvailableSeats() + booking.getSeatNumbers().split(",").length));
         store.save(trip);
-        store.save(new AuditLog(actor, "BOOKING_CANCELLED", "Booking", reference, "Mock refund completed: " + refundAmount));
+        store.save(new AuditLog(actor, "BOOKING_CANCELLED", "Booking", reference, "Demo refund simulated; no money was transferred: " + refundAmount));
         return bookingView(booking);
     }
 
