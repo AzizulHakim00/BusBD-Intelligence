@@ -100,7 +100,7 @@ export default function PassengerBookingV23({ user, message, onOpenAccount }: {
   }
 
   if (ticket) return <div className="v23-confirmation">
-    <div className="v23-success">✓</div><span className="eyebrow">Payment accepted</span><h2>Journey confirmed</h2>
+    <div className="v23-success">✓</div><span className="eyebrow">Demo payment simulated</span><h2>Journey confirmed</h2>
     <img src={ticket.qrCode} alt={`QR ticket ${ticket.reference}`} />
     <strong>{ticket.reference}</strong><p>{ticket.origin} → {ticket.destination}</p><p>Seats {ticket.seats.join(', ')} · {money(ticket.totalAmount)}</p>
     <div className="v23-receipt"><span>Boarding</span><b>{ticket.boardingPoint}</b><span>Dropping</span><b>{ticket.droppingPoint}</b><span>Payment</span><b>{ticket.paymentReference}</b></div>
@@ -136,11 +136,11 @@ export default function PassengerBookingV23({ user, message, onOpenAccount }: {
         {selected.map(number => { const record = passengers[number]; return <div className="v23-passenger-row" key={number}><b>{number}</b><input placeholder="Passenger name" value={record?.fullName || ''} onChange={event => updatePassenger(number, { fullName: event.target.value })} /><select value={record?.passengerType || 'ADULT'} onChange={event => updatePassenger(number, { passengerType: event.target.value as 'ADULT' | 'CHILD' })}><option value="ADULT">Adult</option><option value="CHILD">Child</option></select><select value={record?.gender || ''} onChange={event => updatePassenger(number, { gender: event.target.value as '' | 'MALE' | 'FEMALE' })}><option value="">Gender</option><option value="FEMALE">Female</option><option value="MALE">Male</option></select></div> })}
       </section>
 
-      <section className="v23-card v23-payment"><span className="eyebrow">4 · Secure payment</span><h3>Confirm booking</h3>
+      <section className="v23-card v23-payment"><span className="eyebrow">4 · Demo payment</span><h3>Confirm booking</h3>
         <label>Promo code<input placeholder="BUSBD10" value={promoCode} onChange={event => setPromoCode(event.target.value.toUpperCase())} /></label>
         <label>Provider<select value={paymentProvider} onChange={event => setPaymentProvider(event.target.value)}><option value="MOCK">Mock payment</option><option value="SSLCOMMERZ" disabled>SSLCommerz sandbox — next release</option></select></label>
         <div className="v23-price"><span>Estimated total</span><strong>{money(estimated)}</strong><small>Child and promo discounts are validated by the backend.</small></div>
-        <button className="primary-action" disabled={busy || !selected.length} onClick={confirm}>{busy ? 'Securing seats…' : 'Pay and generate QR ticket →'}</button>
+        <small>This is a demonstration only. No real payment will be charged.</small><button className="primary-action" disabled={busy || !selected.length} onClick={confirm}>{busy ? 'Securing seats…' : 'Simulate payment and generate QR ticket →'}</button>
       </section>
     </div>}
   </div>
