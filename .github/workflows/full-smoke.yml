@@ -16,11 +16,18 @@ jobs:
       - name: Build the production Docker image
         run: docker build --quiet -t busbd-intelligence:full-smoke .
 
+      - name: Start Redis for realistic seat-lock testing
+        run: |
+          docker network create busbd-smoke
+          docker run -d --name busbd-smoke-redis --network busbd-smoke redis:7-alpine
+
       - name: Start with Render Free-style limits
         run: |
           docker run -d --name busbd-full-smoke \
+            --network busbd-smoke \
             -p 8080:8080 \
             -e PORT=8080 \
+            -e REDIS_URL=redis://busbd-smoke-redis:6379 \
             -e DB_POOL_MAX=3 \
             -e DB_POOL_MIN=0 \
             -e REDIS_HEALTH_ENABLED=false \
@@ -56,6 +63,8 @@ jobs:
           find /tmp/busbd-smoke-responses -maxdepth 1 -type f -print -exec sh -c 'echo "--- $1"; cat "$1"' _ {} \; 2>/dev/null || true
           docker logs --tail 240 busbd-full-smoke || true
 
-      - name: Stop container
+      - name: Stop containers and network
         if: always()
-        run: docker rm -f busbd-full-smoke 2>/dev/null || true
+        run: |
+          docker rm -f busbd-full-smoke busbd-smoke-redis 2>/dev/null || true
+          docker network rm busbd-smoke 2>/dev/null || true
