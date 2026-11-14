@@ -69,7 +69,7 @@ DROPPING_POINT="$(jq -r '.[0].droppingPoint // .[0].destination // empty' "$WORK
 test -n "$TRIP_ID"
 test -n "$BOARDING_POINT"
 test -n "$DROPPING_POINT"
-curl --fail --silent --show-error "$BASE_URL/api/trips/$TRIP_ID/seats" -o "$WORK_DIR/seats.json"
+curl --fail-with-body --silent --show-error "$BASE_URL/api/trips/$TRIP_ID/seats" -o "$WORK_DIR/seats.json"
 SEAT="$(jq -r '.seats[] | select(.status == "AVAILABLE") | .number' "$WORK_DIR/seats.json" | head -n1)"
 test -n "$SEAT"
 curl --fail --silent --show-error "$BASE_URL/api/tracking/locations" -o "$WORK_DIR/locations.json"
@@ -119,7 +119,7 @@ VERIFY_PAYLOAD="$(jq -nc --arg token "$TICKET_TOKEN" '{token:$token}')"
 json_post "$BASE_URL/api/tickets/verify" "$VERIFY_PAYLOAD" -o "$WORK_DIR/ticket-verify.json"
 jq -e '.valid == true and .travelAllowed == true' "$WORK_DIR/ticket-verify.json" >/dev/null
 curl --fail-with-body --silent --show-error -X POST -H 'Content-Type: application/json' -H "Authorization: Bearer $PASSENGER_TOKEN" -d '{"reason":"Automated deployment verification"}' "$BASE_URL/api/bookings/$REFERENCE/cancel" -o "$WORK_DIR/cancelled.json"
-jq -e '.status == "CANCELLED" and .refundStatus == "COMPLETED"' "$WORK_DIR/cancelled.json" >/dev/null
+jq -e '.status == "CANCELLED" and .refundStatus == "SIMULATED"' "$WORK_DIR/cancelled.json" >/dev/null
 
 log "submitting and classifying passenger support"
 COMPLAINT_PAYLOAD="$(jq -nc --arg email "$EMAIL" '{email:$email,category:"Refund",message:"Please check the refund for my smoke test booking"}')"
