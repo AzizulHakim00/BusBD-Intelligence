@@ -1,6 +1,7 @@
 import type { BookingView, DriverAssignment, Location, PassengerInput, Seat, Trip, User } from './types'
 
 const tokenKey = 'busbd_token'
+const bookingEmailKey = 'busbd_last_booking_email'
 
 async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
   const headers = new Headers(init.headers)
@@ -22,7 +23,10 @@ export const api = {
   book: (payload: { holdId: string; passengerName: string; passengerEmail: string; passengerPhone: string; paymentProvider: string; boardingPoint?: string; droppingPoint?: string; promoCode?: string; idempotencyKey?: string; passengers?: PassengerInput[] }) => {
     return request<BookingView>('/api/bookings', { method: 'POST', headers: payload.idempotencyKey ? { 'Idempotency-Key': payload.idempotencyKey } : {}, body: JSON.stringify(payload) })
   },
-  booking: (reference: string) => request<BookingView>(`/api/bookings/${encodeURIComponent(reference)}?email=${encodeURIComponent('')}`),
+  booking: (reference: string) => {
+    const email = requestBookingEmail()
+    return request<BookingView>(`/api/bookings/${encodeURIComponent(reference)}?email=${encodeURIComponent(email)}`)
+  },
   myBookings: () => request<BookingView[]>('/api/bookings'),
   cancelBooking: (reference: string, reason = 'Passenger cancellation') =>
     request<BookingView>(`/api/bookings/${encodeURIComponent(reference)}/cancel`, { method: 'POST', body: JSON.stringify({ reason }) }),
