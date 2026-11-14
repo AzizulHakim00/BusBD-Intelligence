@@ -49,12 +49,12 @@ export default function AccountV23({ user, onAuth, setUser, message }: {
   }
 
   const cancel = async (reference: string) => {
-    if (!window.confirm(`Cancel booking ${reference}? The refund policy will be applied automatically.`)) return
+    if (!window.confirm(`Cancel booking ${reference}? The demo refund estimate will be recorded. No money will be transferred.`)) return
     setBusy(true)
     try {
       const updated = await api.cancelBooking(reference)
       setBookings(current => current.map(item => item.reference === reference ? updated : item))
-      message(`Booking cancelled. Mock refund: ৳${Number(updated.refundAmount || 0).toLocaleString('en-BD')}`)
+      message(`Booking cancelled. Demo refund simulated: ৳${Number(updated.refundAmount || 0).toLocaleString('en-BD')}. No money was transferred.`)
     } catch (error) { message((error as Error).message, true) }
     finally { setBusy(false) }
   }
@@ -97,7 +97,7 @@ export default function AccountV23({ user, onAuth, setUser, message }: {
       {bookings.map(booking => <article className="v23-ticket-row" key={booking.reference}>
         <img src={booking.qrCode} alt={`QR ticket ${booking.reference}`} />
         <div><strong>{booking.reference}</strong><span>{booking.origin} → {booking.destination}</span><small>{new Date(booking.departureTime).toLocaleString('en-BD')} · Seats {booking.seats.join(', ')}</small><small>{booking.boardingPoint} → {booking.droppingPoint}</small></div>
-        <div className="v23-status"><b className={booking.status === 'CANCELLED' ? 'bad' : ''}>{booking.status}</b><span>৳{Number(booking.totalAmount).toLocaleString('en-BD')}</span><small>{booking.refundStatus !== 'NOT_REQUESTED' ? `${booking.refundStatus}: ৳${booking.refundAmount}` : booking.paymentStatus}</small>{booking.status === 'CONFIRMED' && <button onClick={() => cancel(booking.reference)}>Cancel</button>}</div>
+        <div className="v23-status"><b className={booking.status === 'CANCELLED' ? 'bad' : ''}>{booking.status}</b><span>৳{Number(booking.totalAmount).toLocaleString('en-BD')}</span><small>{booking.refundStatus !== 'NOT_REQUESTED' ? `Demo refund ${booking.refundStatus}: ৳${booking.refundAmount}` : `Demo payment: ${booking.paymentStatus}`}</small>{booking.status === 'CONFIRMED' && <button onClick={() => cancel(booking.reference)}>Cancel</button>}</div>
       </article>)}
     </section>
 
