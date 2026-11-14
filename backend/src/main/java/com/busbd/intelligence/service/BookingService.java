@@ -94,7 +94,12 @@ public class BookingService {
 
     public Map<String, Object> confirm(BookingCommand command) {
         Optional<Booking> prior = store.bookingByIdempotencyKey(command.idempotencyKey());
-        if (prior.isPresent()) return bookingView(prior.get());
+        if (prior.isPresent()) {
+            if (!prior.get().getPassengerEmail().equalsIgnoreCase(command.passengerEmail().trim())) {
+                throw new SecurityException("This idempotency key is already associated with another booking");
+            }
+            return bookingView(prior.get());
+        }
         SeatLockService.SeatHold hold = seatLocks.get(command.holdId())
                 .orElseThrow(() -> new IllegalStateException("Seat hold expired. Please select seats again."));
         if (hold.owner() == null || !hold.owner().equalsIgnoreCase(command.passengerEmail().trim())) {
